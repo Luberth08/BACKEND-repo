@@ -1,0 +1,10 @@
+fastapi[all] #framework
+uvicorn #servidor
+sqlalchemy[asyncio]>=2.0.0 #ORM asincronico
+asyncpg #optimizacion asincronica para postgreSQL
+pydantic-settings #validacion .env
+geoalchemy2 #PostGIS
+alembic #control de versiones BD
+python-jose[cryptography] #JWT
+passlib[bcrypt] #hash
+python-multipart #OAuth2
