@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
@@ -7,9 +7,9 @@ class Usuario(Base):
 
     # atributos
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(100), nullable=False, unique=True)  # Añadí unique
+    nombre = Column(String(100), nullable=False)
     contrasena = Column(String(255), nullable=False)
-    url_img_perfil = Column(String(500), nullable=True)
+    url_img_perfil = Column(Text, nullable=True)
     id_persona = Column(Integer, ForeignKey("persona.id", ondelete="RESTRICT"), unique=True, nullable=False)
 
     # relaciones

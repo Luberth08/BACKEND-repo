@@ -9,7 +9,7 @@ AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
-    autofush=False
+    autoflush=False
 )
 
 # Dependencia para los Endpoints

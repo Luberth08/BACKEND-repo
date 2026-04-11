@@ -8,3 +8,4 @@ alembic #control de versiones BD
 python-jose[cryptography] #JWT
 passlib[bcrypt] #hash
 python-multipart #OAuth2
+psycopg2-binary #sincrono
