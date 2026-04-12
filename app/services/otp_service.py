@@ -90,7 +90,16 @@ def send_otp_email(email: str, otp: str) -> None:
             server.starttls()  # Habilitar TLS
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
-        print(f"[EMAIL] OTP {otp} enviado a {email}")
+        print(f"[EMAIL] OTP enviado a {email}")
     except Exception as e:
         print(f"[ERROR] No se pudo enviar el email a {email}: {e}")
         # Opcional: relanzar la excepción o manejarla
+
+async def send_otp_email_safe(email: str, action: str, expires_minutes: int = 10) -> str:
+    """
+    Genera un OTP, lo envía por email y lo guarda en memoria con la acción especificada.
+    """
+    otp = generate_otp()
+    store_otp(email, otp, expires_minutes=expires_minutes, temp_data={"action": action})
+    send_otp_email(email, otp)
+    return otp

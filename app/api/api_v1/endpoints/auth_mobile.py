@@ -11,36 +11,14 @@ from app.schemas.auth import (
 from app.crud.crud_persona import persona as crud_persona
 from app.crud.crud_usuario import usuario as crud_usuario
 from app.crud.crud_sesion import sesion as crud_sesion
+from app.services.user_creation import create_persona_with_data
 from app.services.otp_service import (
-    generate_otp, store_otp, get_otp_data, delete_otp, send_otp_email
+    get_otp_data, delete_otp, send_otp_email_safe
 )
-from app.api.api_v1.deps import require_mobile_platform
 from app.models.persona import Persona
 from app.services.auth_utils import create_token_and_session
 
 router = APIRouter(prefix="/auth/mobile", tags=["Authentication - Mobile"])
-
-# ========== FUNCIONES AUXILIARES ==========
-
-async def _create_persona(db: AsyncSession, email: str) -> Persona:
-    """Crea una nueva persona solo con email."""
-    existing = await crud_persona.get_by_email(db, email)
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    persona_data = {"email": email}
-    nueva_persona = await crud_persona.create(db, persona_data)
-    return nueva_persona
-
-async def _send_otp_email_safe(email: str, action: str, expires_minutes: int = 10) -> str:
-    """
-    Genera un OTP, lo envía por email y lo guarda en memoria con la acción especificada.
-    """
-    otp = generate_otp()
-    store_otp(email, otp, expires_minutes=expires_minutes, temp_data={"action": action})
-    send_otp_email(email, otp)
-    return otp
-
-# ========== ENDPOINTS ==========
 
 @router.post("/check-email", response_model=EmailCheckResponse)
 async def check_email(
@@ -68,7 +46,7 @@ async def request_otp(
     usuario = await crud_usuario.get_by_id_persona(db, persona.id)
     if usuario:
         raise HTTPException(status_code=400, detail="User already has a password; use /login")
-    await _send_otp_email_safe(req.email, action="verify")
+    await send_otp_email_safe(req.email, action="verify")
     return {"message": "OTP sent"}
 
 @router.post("/register", status_code=status.HTTP_200_OK)
@@ -83,7 +61,7 @@ async def register_new_conductor(
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     # Guardamos datos temporales de "registro"
-    await _send_otp_email_safe(req.email, action="register")
+    await send_otp_email_safe(req.email, action="register")
     return {"message": "OTP sent. Please verify to complete registration."}
 
 @router.post("/verify-otp", response_model=TokenResponse)
@@ -102,7 +80,7 @@ async def verify_otp(
     action = record["temp_data"].get("action")
     if action == "register":
         # Crear nueva persona
-        persona = await _create_persona(db, req.email)
+        persona = await create_persona_with_data(db, req.email)
     elif action == "verify":
         # Persona debe existir y no tener usuario
         persona = await crud_persona.get_by_email(db, req.email)

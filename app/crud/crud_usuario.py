@@ -8,5 +8,9 @@ class CRUDUsuario(CRUDBase[Usuario]):
     async def get_by_id_persona(self, db: AsyncSession, id_persona: int) -> Optional[Usuario]:
         result = await db.execute(select(Usuario).where(Usuario.id_persona == id_persona))
         return result.scalar_one_or_none()
+    
+    async def get_by_nombre(self, db: AsyncSession, nombre: str) -> Optional[Usuario]:
+        result = await db.execute(select(Usuario).where(Usuario.nombre == nombre))
+        return result.scalar_one_or_none()
 
 usuario = CRUDUsuario(Usuario)

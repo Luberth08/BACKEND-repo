@@ -2,11 +2,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
+from app.core.security import get_password_hash
 from app.core.security import verify_password
-from app.schemas.auth import LoginRequest, TokenResponse
+from app.schemas.auth import LoginRequest, TokenResponse, WebRegisterRequest
 from app.crud.crud_persona import persona as crud_persona
 from app.crud.crud_usuario import usuario as crud_usuario
+from app.crud.crud_rol import rol as crud_rol
+from app.crud.crud_rol_usuario import rol_usuario as crud_rol_usuario
 from app.crud.crud_sesion import sesion as crud_sesion
+from app.services.user_creation import create_persona_with_data
 from app.services.auth_utils import create_token_and_session
 
 router = APIRouter(prefix="/auth/web", tags=["Authentication - Web"])
@@ -42,3 +46,39 @@ async def web_logout(
         sesion.activa = False
         await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/register", response_model=TokenResponse)
+async def web_register(
+    req: WebRegisterRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    rol_aspirante = await crud_rol.get_by_nombre(db, "aspirante")
+    if not rol_aspirante:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role 'aspirante' not found in database"
+        )
+    # Verificar que el username no exista
+    existing_user = await crud_usuario.get_by_nombre(db, req.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
+        )
+    # Extraer datos opcionales de persona
+    persona_extra = req.dict(exclude={"email", "password", "username"})
+    # Crear persona 
+    persona = await create_persona_with_data(db, req.email, persona_extra)
+    # Crear usuario
+    hashed = get_password_hash(req.password)
+    usuario_data = {
+        "nombre": req.username,
+        "contrasena": hashed,
+        "id_persona": persona.id
+    }
+    nuevo_usuario = await crud_usuario.create(db, usuario_data)
+    # Asignar rol 'aspirante'
+    await crud_rol_usuario.add_rol(db, nuevo_usuario.id, rol_aspirante.id)
+    # Generar token y devolver
+    access_token = await create_token_and_session(db, req.email)
+    return TokenResponse(access_token=access_token)

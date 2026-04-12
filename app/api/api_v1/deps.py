@@ -22,7 +22,7 @@ async def get_current_persona(
     
     # Buscar sesión activa
     sesion = await crud_sesion.get_by_token(db, token_value)
-    if not sesion or not sesion.activa:
+    if not sesion:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
     
     persona = await crud_persona.get(db, sesion.id_persona)

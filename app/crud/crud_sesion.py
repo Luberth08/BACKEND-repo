@@ -7,7 +7,14 @@ from app.models.sesion import Sesion
 
 class CRUDSesion(CRUDBase[Sesion]):
     async def get_by_token(self, db: AsyncSession, token: str) -> Optional[Sesion]:
-        result = await db.execute(select(Sesion).where(Sesion.token == token))
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(Sesion).where(
+                Sesion.token == token,
+                Sesion.activa == True,
+                Sesion.fecha_expira > now
+            )
+        )
         return result.scalar_one_or_none()
 
     async def get_active_by_persona(self, db: AsyncSession, id_persona: int) -> Optional[Sesion]:

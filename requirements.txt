@@ -6,6 +6,6 @@ pydantic-settings #validacion .env
 geoalchemy2 #PostGIS
 alembic #control de versiones BD
 python-jose[cryptography] #JWT
-passlib[bcrypt] #hash
+werkzeug #bcrypt
 python-multipart #OAuth2
 psycopg2-binary #sincrono

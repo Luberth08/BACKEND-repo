@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi import HTTPException, status
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.crud.crud_persona import persona as crud_persona
 from app.crud.crud_usuario import usuario as crud_usuario
+from app.models.rol import Rol
+from app.models.rol_usuario import RolUsuario
 from app.crud.crud_rol_usuario import rol_usuario as crud_rol_usuario
 from app.crud.crud_sesion import sesion as crud_sesion
 from app.crud.crud_dispositivo_usuario import dispositivo_usuario as crud_dispositivo
@@ -31,8 +34,10 @@ async def create_token_and_session(
     usuario = await crud_usuario.get_by_id_persona(db, persona.id)
     # Determinar roles
     if usuario:
-        roles = await crud_rol_usuario.get_roles_by_usuario(db, usuario.id)
-        role_names = [r.rol.nombre for r in roles]
+        # Consulta directa para obtener los nombres de los roles
+        stmt = select(Rol.nombre).join(RolUsuario, Rol.id == RolUsuario.id_rol).where(RolUsuario.id_usuario == usuario.id)
+        result = await db.execute(stmt)
+        role_names = result.scalars().all()
     else:
         # Conductor sin usuario
         role_names = ["conductor"]

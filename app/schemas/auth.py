@@ -30,48 +30,15 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-
-
-
-
-""" from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
-from app.schemas.persona import PersonaCreate
-
-class EmailCheckRequest(BaseModel):
+# ---------- Para registro de usuario via web ----------
+class WebRegisterRequest(BaseModel):
     email: EmailStr
-
-class EmailCheckResponse(BaseModel):
-    conductor_exists: bool
-    user_exists: bool
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-    fcm_token: Optional[str] = None
-
-class RegisterConductorRequest(BaseModel):
-    email: EmailStr
-    persona: PersonaCreate
-    fcm_token: Optional[str] = None
-
-class CompleteRegistrationRequest(BaseModel):
-    email: EmailStr
-    code: str
-    fcm_token: Optional[str] = None
-
-class RegisterConductorFromUserRequest(BaseModel):
-    email: EmailStr
-    fcm_token: Optional[str] = None
-
-class RequestOTPRequest(BaseModel):
-    email: EmailStr
-
-class LoginWithOTPRequest(BaseModel):
-    email: EmailStr
-    code: str
-    fcm_token: Optional[str] = None
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer" """
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    nombre: Optional[str] = None
+    apellido_p: Optional[str] = None
+    apellido_m: Optional[str] = None
+    ci: Optional[str] = None
+    complemento: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None

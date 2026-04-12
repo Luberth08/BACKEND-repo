@@ -7,7 +7,7 @@ class Usuario(Base):
 
     # atributos
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(100), nullable=False)
+    nombre = Column(String(100), nullable=False, unique=True)
     contrasena = Column(String(255), nullable=False)
     url_img_perfil = Column(Text, nullable=True)
     id_persona = Column(Integer, ForeignKey("persona.id", ondelete="RESTRICT"), unique=True, nullable=False)
