@@ -6,4 +6,5 @@ from app.models import ( # noqa
     RolUsuario,
     DispositivoUsuario,
     Sesion,
+    Vehiculo,
 )

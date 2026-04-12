@@ -20,3 +20,4 @@ class Persona(Base):
     usuario = relationship("Usuario", back_populates="persona", uselist=False)
     dispositivos = relationship("DispositivoUsuario", back_populates="persona")
     sesiones = relationship("Sesion", back_populates="persona")
+    vehiculos = relationship("Vehiculo", back_populates="persona")

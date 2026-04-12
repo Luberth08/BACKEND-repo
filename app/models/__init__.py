@@ -4,3 +4,4 @@ from app.models.rol import Rol
 from app.models.rol_usuario import RolUsuario
 from app.models.dispositivo_usuario import DispositivoUsuario
 from app.models.sesion import Sesion 
+from app.models.vehiculo import Vehiculo
