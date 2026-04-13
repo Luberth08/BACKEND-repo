@@ -42,3 +42,19 @@ class WebRegisterRequest(BaseModel):
     complemento: Optional[str] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
+
+class RegisterInitRequest(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    nombre: Optional[str] = None
+    apellido_p: Optional[str] = None
+    apellido_m: Optional[str] = None
+    ci: Optional[str] = None
+    complemento: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+
+class RegisterCompleteRequest(BaseModel):
+    email: EmailStr
+    code: str

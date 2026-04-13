@@ -18,6 +18,17 @@ async def list_vehiculos(
     vehiculos = await crud_vehiculo.get_by_persona(db, current_persona.id)
     return vehiculos
 
+@router.get("/{vehiculo_id}", response_model=VehiculoResponse)
+async def get_vehiculo(
+    vehiculo_id: int,
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    vehiculo = await crud_vehiculo.get(db, vehiculo_id)
+    if not vehiculo or vehiculo.id_persona != current_persona.id:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+    return vehiculo
+
 @router.post("/", response_model=VehiculoResponse, status_code=201)
 async def create_vehiculo(
     req: VehiculoCreate,

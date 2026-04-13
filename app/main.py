@@ -5,10 +5,10 @@ from app.api.api_v1.endpoints import auth_mobile, auth_web, conductores, perfil,
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
-# Configurar CORS (importante para que el frontend pueda consumir la API)
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción restringe a tus dominios
+    allow_origins=["http://localhost:4200"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

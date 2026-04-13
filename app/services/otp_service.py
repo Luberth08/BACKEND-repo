@@ -73,7 +73,7 @@ def send_otp_email(email: str, otp: str) -> None:
     body = f"""
     <h2>Hola,</h2>
     <p>Tu código de verificación es: <strong>{otp}</strong></p>
-    <p>Este código expira en 10 minutos.</p>
+    <p>Este código expira en 5 minutos.</p>
     <p>Si no solicitaste este código, ignora este mensaje.</p>
     """
     
@@ -95,11 +95,19 @@ def send_otp_email(email: str, otp: str) -> None:
         print(f"[ERROR] No se pudo enviar el email a {email}: {e}")
         # Opcional: relanzar la excepción o manejarla
 
-async def send_otp_email_safe(email: str, action: str, expires_minutes: int = 10) -> str:
+async def send_otp_email_safe(
+    email: str, 
+    action: str, 
+    expires_minutes: int = 5,
+    extra_temp_data: Optional[dict] = None
+) -> str:
     """
     Genera un OTP, lo envía por email y lo guarda en memoria con la acción especificada.
     """
     otp = generate_otp()
-    store_otp(email, otp, expires_minutes=expires_minutes, temp_data={"action": action})
+    temp_data = {"action": action}
+    if extra_temp_data:
+        temp_data.update(extra_temp_data)
+    store_otp(email, otp, expires_minutes=expires_minutes, temp_data=temp_data)
     send_otp_email(email, otp)
     return otp
