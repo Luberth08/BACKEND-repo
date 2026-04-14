@@ -7,4 +7,8 @@ from app.models import ( # noqa
     DispositivoUsuario,
     Sesion,
     Vehiculo,
+    Permiso,
+    RolPermiso,
+    Taller,
+    SolicitudAfiliacion
 )

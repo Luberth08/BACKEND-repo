@@ -5,6 +5,7 @@ from app.db.base_class import Base
 class Sesion(Base):
     __tablename__ = "sesion"
 
+    # atributos
     id = Column(Integer, primary_key=True, index=True)
     token = Column(Text, nullable=False, unique=True)
     fecha_inicio = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
@@ -12,4 +13,5 @@ class Sesion(Base):
     activa = Column(Boolean, nullable=False, default=True)
     id_persona = Column(Integer, ForeignKey("persona.id", ondelete="CASCADE"), nullable=False)
 
+    # relaciones
     persona = relationship("Persona", back_populates="sesiones")

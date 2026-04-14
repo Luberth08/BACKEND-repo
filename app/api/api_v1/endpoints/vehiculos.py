@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.vehiculo import VehiculoCreate, VehiculoUpdate, VehiculoResponse
 from app.crud.crud_vehiculo import vehiculo as crud_vehiculo
-from app.api.api_v1.deps import get_current_persona
+from app.api.api_v1.deps import get_current_persona, require_permiso
 from app.models.persona import Persona
 from sqlalchemy import select
 from app.models.vehiculo import Vehiculo

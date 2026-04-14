@@ -5,3 +5,7 @@ from app.models.rol_usuario import RolUsuario
 from app.models.dispositivo_usuario import DispositivoUsuario
 from app.models.sesion import Sesion 
 from app.models.vehiculo import Vehiculo
+from app.models.permiso import Permiso
+from app.models.rol_permiso import RolPermiso
+from app.models.taller import Taller
+from app.models.solicitud_afiliacion import SolicitudAfiliacion

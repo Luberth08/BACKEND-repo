@@ -14,6 +14,25 @@ from typing import Optional
 
 router = APIRouter(prefix="/perfil", tags=["Perfil"])
 
+@router.get("/me", response_model=PerfilResponse)
+async def get_my_profile(
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    usuario = await crud_usuario.get_by_id_persona(db, current_persona.id)
+    return PerfilResponse(
+        email=current_persona.email,
+        username=usuario.nombre if usuario else None,
+        url_img_perfil=usuario.url_img_perfil if usuario else None,
+        nombre=current_persona.nombre,
+        apellido_p=current_persona.apellido_p,
+        apellido_m=current_persona.apellido_m,
+        ci=current_persona.ci,
+        complemento=current_persona.complemento,
+        telefono=current_persona.telefono,
+        direccion=current_persona.direccion,
+    )
+
 @router.put("/me", response_model=PerfilResponse)
 async def update_my_profile(
     req: UpdatePerfilRequest,

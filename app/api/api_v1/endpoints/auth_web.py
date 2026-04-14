@@ -96,11 +96,11 @@ async def register_complete(
     if temp_data.get("action") != "register":
         raise HTTPException(400, "Invalid OTP flow")
     # Verificar que existe rol
-    rol_aspirante = await crud_rol.get_by_nombre(db, "aspirante")
-    if not rol_aspirante:
+    rol_cliente = await crud_rol.get_by_nombre(db, "cliente")
+    if not rol_cliente:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Role 'aspirante' not found in database"
+            detail="Role 'cliente' not found in database"
         )
     # Recuperar datos
     user_data = temp_data["data"]
@@ -128,7 +128,7 @@ async def register_complete(
     }
     nuevo_usuario = await crud_usuario.create(db, usuario_data)
     # Asignar rol 'aspirante'
-    await crud_rol_usuario.add_rol(db, nuevo_usuario.id, rol_aspirante.id)
+    await crud_rol_usuario.add_rol(db, nuevo_usuario.id, rol_cliente.id)
     # Generar token
     access_token = await create_token_and_session(db, user_data["email"])
     # Limpiar OTP
