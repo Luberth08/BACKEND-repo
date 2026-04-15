@@ -34,8 +34,8 @@ async def get_current_persona(
         raise HTTPException(status_code=401, detail="Persona not found")
     return persona
 
-# Función interna para obtener el usuario autenticado
-async def _get_current_usuario(
+# Función para obtener el usuario autenticado
+async def get_current_usuario(
     token: str = Header(..., alias="Authorization"),
     db: AsyncSession = Depends(get_db)
 ) -> Usuario:
@@ -50,7 +50,7 @@ async def _get_current_usuario(
 # Dependencia para verificar si el usuario autenticado tiene el permiso especificado
 def require_permiso(permiso_concepto: str):
     async def permiso_checker(
-        current_usuario: Usuario = Depends(_get_current_usuario),
+        current_usuario: Usuario = Depends(get_current_usuario),
         db: AsyncSession = Depends(get_db)
     ) -> Usuario:
         permisos = await crud_rol_permiso.get_permisos_conceptos_by_usuario(db, current_usuario.id)

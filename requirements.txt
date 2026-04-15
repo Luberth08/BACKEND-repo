@@ -9,3 +9,4 @@ python-jose[cryptography] #JWT
 werkzeug #bcrypt
 python-multipart #OAuth2
 psycopg2-binary #sincrono
+shapely # convertir coordenadas a objetos

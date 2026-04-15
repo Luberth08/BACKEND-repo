@@ -15,7 +15,7 @@ class Taller(Base):
     # atributos
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False)
-    ubicacion = Column(Geography(geometry_type='POINT', srid=4326), nullable=False, create_index=False)
+    ubicacion = Column(Geography(geometry_type='POINT', srid=4326), nullable=False)
     telefono = Column(String(15), nullable=False)
     email = Column(String(255), nullable=False)
     hora_inicio = Column(Time, nullable=True)
