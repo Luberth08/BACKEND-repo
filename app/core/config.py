@@ -1,0 +1,27 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str
+    DATABASE_URL: str
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    # SMTP
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    SMTP_FROM: str
+    
+    # IA
+    OPENAI_API_KEY: str = ""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+@lru_cache
+def get_settings():
+    return Settings()
+
+settings = get_settings()
