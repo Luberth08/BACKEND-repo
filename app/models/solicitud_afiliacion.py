@@ -23,6 +23,7 @@ class SolicitudAfiliacion(Base):
     fecha = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     fecha_revision = Column(TIMESTAMP(timezone=True), nullable=True)
     estado = Column(Enum(EstadoSolicitudAfiliacion), nullable=False, default=EstadoSolicitudAfiliacion.pendiente)
+    comentario_revision = Column(Text, nullable=True)
     id_usuario_solicita = Column(Integer, ForeignKey("usuario.id", ondelete="RESTRICT"), nullable=False)
     id_usuario_revisa = Column(Integer, ForeignKey("usuario.id", ondelete="SET NULL"), nullable=True)
 

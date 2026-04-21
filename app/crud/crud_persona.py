@@ -12,7 +12,7 @@ class CRUDPersona(CRUDBase[Persona]):
     async def get_by_ci_complemento(
         self, db: AsyncSession, ci: str, complemento: Optional[str] = None
     ) -> Optional[Persona]:
-        # Normalizar: si complemento es cadena vacía, tratarlo como None
+        # Si complemento es cadena vacía, tratarlo como None
         comp_val = complemento if complemento else None
         if comp_val is None:
             condition = and_(Persona.ci == ci, Persona.complemento.is_(None))

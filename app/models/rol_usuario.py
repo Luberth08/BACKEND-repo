@@ -6,8 +6,9 @@ class RolUsuario(Base):
     __tablename__ = "rol_usuario"
 
     # atributos
-    id_usuario = Column(Integer, ForeignKey("usuario.id", ondelete="CASCADE"), primary_key=True)
-    id_rol = Column(Integer, ForeignKey("rol.id", ondelete="RESTRICT"), primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False)
+    id_rol = Column(Integer, ForeignKey("rol.id", ondelete="RESTRICT"), nullable=False)
     id_taller = Column(Integer, ForeignKey("taller.id", ondelete="CASCADE"), nullable=True)
 
     # relaciones

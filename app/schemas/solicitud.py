@@ -9,8 +9,8 @@ class EstadoSolicitudEnum(str, Enum):
     rechazada = "rechazada"
 
 class SolicitudAfiliacionBase(BaseModel):
-    nombre: str = Field(..., max_length=100)
-    ubicacion: str  # GeoJSON? Podemos usar un string para lat,lon o un objeto
+    nombre: str = Field(..., max_length=100, description="Nombre del taller")
+    ubicacion: str = Field(..., description="Ubicación en formato 'lat,lon' (ej: -17.3895,-66.1568)")
     telefono: str = Field(..., max_length=15)
     email: EmailStr
     comentario: Optional[str] = None
@@ -25,6 +25,9 @@ class SolicitudAfiliacionResponse(SolicitudAfiliacionBase):
     estado: EstadoSolicitudEnum
     id_usuario_solicita: int
     id_usuario_revisa: Optional[int]
+    nombre_usuario_solicita: str
+    nombre_usuario_revisa: Optional[str] = None
+    comentario_revision: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -32,3 +35,9 @@ class SolicitudAfiliacionResponse(SolicitudAfiliacionBase):
 class SolicitudAfiliacionUpdateEstado(BaseModel):
     estado: EstadoSolicitudEnum
     comentario_revision: Optional[str] = None
+
+class SolicitudListResponse(BaseModel):
+    items: list[SolicitudAfiliacionResponse]
+    total: int
+    skip: int
+    limit: int

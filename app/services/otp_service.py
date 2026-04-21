@@ -1,29 +1,30 @@
-import random
+import secrets
+import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Any
-
+from typing import Dict, Optional
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
+from app.core.constants import OTP_EXPIRE_MINUTES
+from app.core.exceptions import OTPNotFoundError, OTPExpiredError, OTPSendError
 
 # Almacenamiento en memoria: email -> {"code": str, "expires_at": datetime, "temp_data": dict}
 _otp_storage: Dict[str, dict] = {}
 
 def generate_otp() -> str:
-    """Genera un código OTP de 6 dígitos."""
-    return f"{random.randint(100000, 999999)}"
+    """Genera un código OTP de 6 dígitos criptográficamente seguro."""
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 def store_otp(
     email: str,
     otp: str,
-    expires_minutes: int = 10,
     temp_data: Optional[dict] = None
 ) -> None:
     """
     Almacena un OTP con su fecha de expiración y datos temporales asociados.
     """
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES)
     _otp_storage[email] = {
         "code": otp,
         "expires_at": expires_at,
@@ -37,44 +38,52 @@ def get_otp_data(email: str) -> Optional[dict]:
     """
     record = _otp_storage.get(email)
     if not record:
-        return None
+        raise OTPNotFoundError()
     if datetime.now(timezone.utc) > record["expires_at"]:
         delete_otp(email)
-        return None
+        raise OTPExpiredError()
     return record
-
-def verify_otp(email: str, code: str) -> bool:
-    """
-    Verifica si el código OTP es correcto (sin eliminar el registro).
-    Útil para primero obtener los datos temporales y luego eliminarlos manualmente.
-    """
-    record = get_otp_data(email)
-    if not record or record["code"] != code:
-        return False
-    return True
 
 def delete_otp(email: str) -> None:
     """Elimina el OTP del almacenamiento."""
     _otp_storage.pop(email, None)
 
-def send_otp_sms(email: str, otp: str) -> None:
-    """
-    Envía el OTP por SMS (simulado).
-    En producción, reemplazar con integración real (Twilio, AWS SNS, etc.).
-    """
-    print(f"[MOCK SMS] Enviando OTP {otp} a {email}")
-    # Aquí iría la llamada a la API de SMS real
-
-def send_otp_email(email: str, otp: str) -> None:
+def _send_otp_email_sync(email: str, otp: str) -> None:
     """
     Envía el OTP por correo electrónico usando SMTP.
     """
     subject = "Tu código de verificación"
     body = f"""
-    <h2>Hola,</h2>
-    <p>Tu código de verificación es: <strong>{otp}</strong></p>
-    <p>Este código expira en 5 minutos.</p>
-    <p>Si no solicitaste este código, ignora este mensaje.</p>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Código de verificación</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #E6E8E5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 20px auto; background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+            <tr>
+                <td style="padding: 30px 30px 20px 30px; text-align: center; background-color: #932D30; border-radius: 16px 16px 0 0;">
+                    <h1 style="margin: 0; color: #FFFFFF; font-size: 24px;">Plataforma de Asistencia Vehicular</h1>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 30px;">
+                    <h2 style="color: #421413; margin-top: 0;">Hola,</h2>
+                    <p style="color: #2C2C2C; font-size: 16px; line-height: 1.5;">Has solicitado un código de verificación. Tu código es:</p>
+                    <div style="background-color: #E6E8E5; border-radius: 12px; padding: 15px; text-align: center; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #932D30;">{otp}</span>
+                    </div>
+                    <p style="color: #2C2C2C; font-size: 16px; line-height: 1.5;">Este código expira en <strong>{OTP_EXPIRE_MINUTES} minutos</strong>.</p>
+                    <p style="color: #2C2C2C; font-size: 16px; line-height: 1.5;">Si no solicitaste este código, ignora este mensaje.</p>
+                    <hr style="border: none; border-top: 1px solid #B76369; margin: 30px 0;">
+                    <p style="color: #52341A; font-size: 12px; text-align: center;">© 2025 Plataforma de Asistencia Vehicular. Todos los derechos reservados.</p>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
     """
     
     # Crear mensaje
@@ -90,24 +99,25 @@ def send_otp_email(email: str, otp: str) -> None:
             server.starttls()  # Habilitar TLS
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
-        print(f"[EMAIL] OTP enviado a {email}")
     except Exception as e:
-        print(f"[ERROR] No se pudo enviar el email a {email}: {e}")
-        # Opcional: relanzar la excepción o manejarla
+        raise OTPSendError(f"No se pudo enviar el email a {email}: {str(e)}")
 
 async def send_otp_email_safe(
-    email: str, 
-    action: str, 
-    expires_minutes: int = 5,
+    email: str,
+    action: str,
     extra_temp_data: Optional[dict] = None
 ) -> str:
     """
-    Genera un OTP, lo envía por email y lo guarda en memoria con la acción especificada.
+    Genera un OTP, lo envía por email (de forma asíncrona) y lo guarda en memoria.
     """
     otp = generate_otp()
     temp_data = {"action": action}
     if extra_temp_data:
         temp_data.update(extra_temp_data)
-    store_otp(email, otp, expires_minutes=expires_minutes, temp_data=temp_data)
-    send_otp_email(email, otp)
+    store_otp(email, otp, temp_data=temp_data)
+
+    # Enviar email en un hilo separado para no bloquear
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _send_otp_email_sync, email, otp)
+
     return otp

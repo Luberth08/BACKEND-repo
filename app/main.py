@@ -1,11 +1,13 @@
 from fastapi import FastAPI
+import os
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.api_v1.endpoints import auth_mobile, auth_web, conductores, perfil, vehiculos, solicitudes
+from app.api.api_v1.routers import api_router
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
-# Configurar CORS
+# Configurar CORS (si no lo has hecho)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200"],
@@ -15,12 +17,8 @@ app.add_middleware(
 )
 
 # Incluir routers
-app.include_router(auth_mobile.router, prefix="/api/v1")
-app.include_router(auth_web.router, prefix="/api/v1")
-app.include_router(conductores.router, prefix="/api/v1")
-app.include_router(perfil.router, prefix="/api/v1")
-app.include_router(vehiculos.router, prefix="/api/v1")
-app.include_router(solicitudes.router, prefix="/api/v1")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

@@ -9,10 +9,4 @@ class CRUDRol(CRUDBase[Rol]):
         result = await db.execute(select(Rol).where(Rol.nombre == nombre))
         return result.scalar_one_or_none()
 
-    async def get_or_create(self, db: AsyncSession, nombre: str) -> Rol:
-        rol = await self.get_by_nombre(db, nombre)
-        if not rol:
-            rol = await self.create(db, {"nombre": nombre})
-        return rol
-
 rol = CRUDRol(Rol)

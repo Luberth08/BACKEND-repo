@@ -12,7 +12,7 @@ class CRUDBase(Generic[ModelType]):
     async def create(self, db: AsyncSession, obj_in: Dict[str, Any]) -> ModelType:
         db_obj = self.model(**obj_in)
         db.add(db_obj)
-        await db.commit()
+        await db.flush()
         await db.refresh(db_obj)
         return db_obj
 
@@ -28,7 +28,7 @@ class CRUDBase(Generic[ModelType]):
         for field, value in obj_in.items():
             setattr(db_obj, field, value)
         db.add(db_obj)
-        await db.commit()
+        await db.flush()
         await db.refresh(db_obj)
         return db_obj
 
@@ -36,7 +36,7 @@ class CRUDBase(Generic[ModelType]):
         obj = await self.get(db, id)
         if obj:
             await db.delete(obj)
-            await db.commit()
+            await db.flush()
         return obj
 
     async def count(self, db: AsyncSession) -> int:

@@ -32,7 +32,6 @@ class CRUDSesion(CRUDBase[Sesion]):
         await db.execute(
             update(Sesion).where(Sesion.id_persona == id_persona).values(activa=False)
         )
-        await db.commit()
 
     async def create_session(self, db: AsyncSession, token: str, expires_at: datetime, id_persona: int) -> Sesion:
         return await self.create(db, {
