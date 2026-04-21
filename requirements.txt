@@ -1,3 +1,4 @@
+# Lista de dependencias de python
 fastapi[all] #framework
 uvicorn #servidor
 sqlalchemy[asyncio]>=2.0.0 #ORM asincronico

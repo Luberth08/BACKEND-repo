@@ -1,22 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.vehiculo import VehiculoCreate, VehiculoUpdate, VehiculoResponse
-from app.crud.crud_vehiculo import vehiculo as crud_vehiculo
-from app.api.api_v1.deps import get_current_persona, require_permiso
+from app.schemas.vehiculo import VehiculoCreate, VehiculoUpdate, VehiculoResponse, VehiculoListResponse
+from app.services.vehiculo_service import vehiculo_service
+from app.core.deps import get_current_persona
 from app.models.persona import Persona
-from sqlalchemy import select
-from app.models.vehiculo import Vehiculo
+from app.crud.crud_vehiculo import vehiculo as crud_vehiculo
 
-router = APIRouter(prefix="/vehiculos", tags=["Vehículos"])
+router = APIRouter(tags=["Vehículos"])
 
-@router.get("/", response_model=list[VehiculoResponse])
+@router.get("/", response_model=VehiculoListResponse)
 async def list_vehiculos(
+    skip: int = Query(0, ge=0, description="Número de registros a saltar"),
+    limit: int = Query(10, ge=1, le=100, description="Cantidad de registros por página"),
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    vehiculos = await crud_vehiculo.get_by_persona(db, current_persona.id)
-    return vehiculos
+    items, total = await vehiculo_service.list_paginated(db, current_persona.id, skip, limit)
+    return VehiculoListResponse(items=items, total=total, skip=skip, limit=limit)
 
 @router.get("/{vehiculo_id}", response_model=VehiculoResponse)
 async def get_vehiculo(
@@ -29,21 +30,13 @@ async def get_vehiculo(
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
     return vehiculo
 
-@router.post("/", response_model=VehiculoResponse, status_code=201)
+@router.post("/", response_model=VehiculoResponse, status_code=status.HTTP_201_CREATED)
 async def create_vehiculo(
     req: VehiculoCreate,
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    # Verificar que la matrícula no exista
-    existing = await db.execute(select(Vehiculo).where(Vehiculo.matricula == req.matricula))
-    if existing.scalar_one_or_none():
-        raise HTTPException(400, "Matrícula ya registrada")
-    
-    vehiculo_data = req.dict()
-    vehiculo_data["id_persona"] = current_persona.id
-    nuevo = await crud_vehiculo.create(db, vehiculo_data)
-    return nuevo
+    return await vehiculo_service.create(db, current_persona.id, req)
 
 @router.put("/{vehiculo_id}", response_model=VehiculoResponse)
 async def update_vehiculo(
@@ -52,28 +45,13 @@ async def update_vehiculo(
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    vehiculo = await crud_vehiculo.get(db, vehiculo_id)
-    if not vehiculo or vehiculo.id_persona != current_persona.id:
-        raise HTTPException(404, "Vehículo no encontrado")
-    
-    # Si se actualiza matrícula, verificar unicidad
-    if req.matricula and req.matricula != vehiculo.matricula:
-        existing = await db.execute(select(Vehiculo).where(Vehiculo.matricula == req.matricula))
-        if existing.scalar_one_or_none():
-            raise HTTPException(400, "Matrícula ya registrada")
-    
-    update_data = req.dict(exclude_unset=True)
-    vehiculo = await crud_vehiculo.update(db, vehiculo, update_data)
-    return vehiculo
+    return await vehiculo_service.update(db, vehiculo_id, current_persona.id, req)
 
-@router.delete("/{vehiculo_id}", status_code=204)
+@router.delete("/{vehiculo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_vehiculo(
     vehiculo_id: int,
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    vehiculo = await crud_vehiculo.get(db, vehiculo_id)
-    if not vehiculo or vehiculo.id_persona != current_persona.id:
-        raise HTTPException(404, "Vehículo no encontrado")
-    await crud_vehiculo.delete(db, vehiculo_id)
-    return Response(status_code=204)
+    await vehiculo_service.delete(db, vehiculo_id, current_persona.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -9,12 +9,6 @@ class CRUDPermiso(CRUDBase[Permiso]):
         result = await db.execute(select(Permiso).where(Permiso.concepto == concepto))
         return result.scalar_one_or_none()
 
-    async def get_or_create(self, db: AsyncSession, concepto: str) -> Permiso:
-        permiso = await self.get_by_concepto(db, concepto)
-        if not permiso:
-            permiso = await self.create(db, {"concepto": concepto})
-        return permiso
-
     async def get_multi_by_conceptos(self, db: AsyncSession, conceptos: List[str]) -> List[Permiso]:
         result = await db.execute(select(Permiso).where(Permiso.concepto.in_(conceptos)))
         return result.scalars().all()

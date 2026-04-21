@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str
     SMTP_FROM: str
 
+    BASE_URL: str
+
     model_config = SettingsConfigDict(env_file=".env")
 
 @lru_cache

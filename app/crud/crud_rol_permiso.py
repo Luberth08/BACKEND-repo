@@ -15,7 +15,7 @@ class CRUDRolPermiso(CRUDBase[RolPermiso]):
     async def add_permiso(self, db: AsyncSession, id_rol: int, id_permiso: int) -> RolPermiso:
         nuevo = RolPermiso(id_rol=id_rol, id_permiso=id_permiso)
         db.add(nuevo)
-        await db.commit()
+        await db.flush()
         await db.refresh(nuevo)
         return nuevo
 
@@ -26,7 +26,7 @@ class CRUDRolPermiso(CRUDBase[RolPermiso]):
                 RolPermiso.id_permiso == id_permiso
             )
         )
-        await db.commit()
+        await db.flush()
 
     async def get_permisos_conceptos_by_usuario(self, db: AsyncSession, id_usuario: int) -> List[str]:
         """

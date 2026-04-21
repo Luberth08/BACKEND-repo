@@ -7,3 +7,11 @@ from app.crud.crud_sesion import sesion
 from app.crud.crud_vehiculo import vehiculo
 from app.crud.crud_rol_permiso import rol_permiso
 from app.crud.crud_permiso import permiso
+from app.crud.crud_solicitud_afiliacion import solicitud_afiliacion
+from app.crud.crud_taller import taller
+from app.crud.crud_solicitud_diagnostico import solicitud_diagnostico
+from app.crud.crud_evidencia import evidencia 
+from app.crud.crud_diagnostico import diagnostico
+from app.crud.crud_tipo_incidente import tipo_incidente
+from app.crud.crud_incidente import incidente 
+from app.crud.crud_categoria_incidente import categoria_incidente
