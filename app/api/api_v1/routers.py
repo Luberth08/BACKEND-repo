@@ -11,6 +11,8 @@ from .endpoints import (
     empleados,
     tecnicos,
     especialidades,
+    admin_categorias,
+    admin_tipos,
     vehiculos_taller
 )
 
@@ -26,4 +28,6 @@ api_router.include_router(talleres.router, prefix="/talleres", tags=["Talleres"]
 api_router.include_router(empleados.router, tags=["Empleados"])
 api_router.include_router(tecnicos.router, tags=["Técnicos"])
 api_router.include_router(especialidades.router, tags=["Especialidades"])
+api_router.include_router(admin_categorias.router, prefix="/admin/categorias", tags=["Admin - Categorías Incidente"])
+api_router.include_router(admin_tipos.router, prefix="/admin/tipos", tags=["Admin - Tipos Incidente"])
 api_router.include_router(vehiculos_taller.router, tags=["Vehículos Taller"])
