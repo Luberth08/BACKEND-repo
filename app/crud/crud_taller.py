@@ -1,8 +1,8 @@
 from app.crud.base import CRUDBase
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.taller import Taller
+from app.models.taller import Taller, EstadoTaller
 from sqlalchemy import select, func
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from app.models.rol_usuario import RolUsuario
 from app.models.rol import Rol
 
@@ -38,6 +38,22 @@ class CRUDTaller(CRUDBase[Taller]):
         total = total.scalar_one()
 
         # Paginación
+        stmt = stmt.offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        items = result.scalars().all()
+        return items, total
+
+    async def get_paginated(self, db: AsyncSession, skip: int = 0, limit: int = 10, estado: Optional[EstadoTaller] = None) -> Tuple[List[Taller], int]:
+        """
+        Obtiene talleres paginados; si `estado` se provee, filtra por ese estado.
+        """
+        stmt = select(Taller)
+        if estado is not None:
+            stmt = stmt.where(Taller.estado == estado)
+
+        total_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+        total = total_result.scalar_one()
+
         stmt = stmt.offset(skip).limit(limit)
         result = await db.execute(stmt)
         items = result.scalars().all()
