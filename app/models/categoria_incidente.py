@@ -8,6 +8,5 @@ class CategoriaIncidente(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False, unique=True)
-    descripcion = Column(Text, nullable=True)
 
     tipos = relationship("TipoIncidente", back_populates="categoria")

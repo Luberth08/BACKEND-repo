@@ -70,7 +70,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    sync_url = settings.DATABASE_URL.replace("+asyncpg", "")
+    sync_url = settings.SYNC_DATABASE_URL
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = sync_url
 
