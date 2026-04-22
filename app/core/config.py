@@ -4,6 +4,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     PROJECT_NAME: str
     DATABASE_URL: str
+    SYNC_DATABASE_URL: str
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
