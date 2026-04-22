@@ -17,4 +17,8 @@ class CRUDTecnicoEspecialidad:
         result = await db.execute(select(TecnicoEspecialidad).where(TecnicoEspecialidad.id_empleado == id_empleado))
         return result.scalars().all()
 
+    async def get_by_especialidad(self, db: AsyncSession, id_especialidad: int):
+        result = await db.execute(select(TecnicoEspecialidad).where(TecnicoEspecialidad.id_especialidad == id_especialidad))
+        return result.scalars().all()
+
 tecnico_especialidad = CRUDTecnicoEspecialidad()

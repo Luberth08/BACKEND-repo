@@ -121,7 +121,7 @@ async def upload_profile_picture(
     if usuario.url_img_perfil:
         try:
             relative_path = usuario.url_img_perfil.replace(settings.BASE_URL, "")
-            if relative_path.startswith("/static/uploads/"):
+            if relative_path.startswith("/staticuploads//"):
                 filename = relative_path.split("/")[-1]
                 file_path = os.path.join("static/uploads", filename)
                 if os.path.exists(file_path):

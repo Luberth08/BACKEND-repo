@@ -13,3 +13,9 @@ from app.models.empleado import Empleado, EstadoEmpleado
 from app.models.especialidad import Especialidad
 from app.models.tecnico_especialidad import TecnicoEspecialidad
 from app.models.vehiculo_taller import VehiculoTaller, TipoVehiculoTaller, EstadoVehiculoTaller
+from app.models.solicitud_diagnostico import SolicitudDiagnostico
+from app.models.categoria_incidente import CategoriaIncidente
+from app.models.tipo_incidente import TipoIncidente
+from app.models.incidente import Incidente
+from app.models.evidencia import Evidencia
+from app.models.diagnostico import Diagnostico
