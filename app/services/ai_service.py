@@ -1,97 +1,347 @@
+"""
+Servicio de IA para diagnóstico vehicular
+Usa Groq API para LLM, CLIP para imágenes, Whisper para audio
+"""
 import os
 import logging
-from decimal import Decimal
+import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
+WHISPER_MODEL_SIZE = settings.WHISPER_MODEL_SIZE
+GROQ_API_KEY = settings.GROQ_API_KEY or ""
+GROQ_MODEL = settings.GROQ_MODEL
+USE_REAL_AI = settings.USE_REAL_AI
 
-async def transcribe_audio_mock(file_path: str) -> str:
-    """Mock transcription: returns a placeholder text including filename."""
+# Caché de modelos (singleton)
+_CLIP_MODEL = None
+_CLIP_PREPROCESS = None
+_WHISPER_MODEL = None
+
+# ============================================================
+# IMPORTS DE LIBRERÍAS
+# ============================================================
+try:
+    import torch
+    import clip
+    from faster_whisper import WhisperModel
+    from groq import Groq
+    from PIL import Image
+except ImportError as e:
+    logger.critical(f"Faltan dependencias de IA: {e}")
+    raise RuntimeError("Instala: pip install torch clip faster-whisper groq Pillow") from e
+
+
+# ============================================================
+# INICIALIZACIÓN DE MODELOS (singleton)
+# ============================================================
+def _get_clip_model():
+    """Carga CLIP una sola vez y lo mantiene en memoria"""
+    global _CLIP_MODEL, _CLIP_PREPROCESS
+    if _CLIP_MODEL is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Cargando CLIP (ViT-B/32) en {device}...")
+        _CLIP_MODEL, _CLIP_PREPROCESS = clip.load("ViT-B/32", device=device)
+        logger.info("✅ CLIP listo")
+    return _CLIP_MODEL, _CLIP_PREPROCESS
+
+
+def _get_whisper_model():
+    """Carga Whisper una sola vez y lo mantiene en memoria"""
+    global _WHISPER_MODEL
+    if _WHISPER_MODEL is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        logger.info(f"Cargando Whisper ({WHISPER_MODEL_SIZE}) en {device}...")
+        _WHISPER_MODEL = WhisperModel(
+            WHISPER_MODEL_SIZE,
+            device=device,
+            compute_type=compute_type,
+            cpu_threads=4,
+            num_workers=2
+        )
+        logger.info("✅ Whisper listo")
+    return _WHISPER_MODEL
+
+
+# ============================================================
+# 1. TRANSCRIPCIÓN DE AUDIO (faster-whisper)
+# ============================================================
+async def transcribe_audio(file_path: str) -> str:
+    """
+    Transcribe un archivo de audio a texto usando Whisper.
+    
+    Args:
+        file_path: Ruta al archivo de audio (mp3, wav, m4a, etc.)
+    
+    Returns:
+        Texto transcrito en español
+    """
+    if not os.path.exists(file_path):
+        logger.error(f"❌ Audio no encontrado: {file_path}")
+        return ""
+    
+    model = _get_whisper_model()
+    if not model:
+        return ""
+    
     try:
-        name = os.path.basename(file_path)
-        return f"[TRANSCRIPCIÓN MOCK] archivo: {name}"
+        loop = asyncio.get_event_loop()
+        segments, _ = await loop.run_in_executor(
+            None,
+            lambda: model.transcribe(file_path, beam_size=5, language="es")
+        )
+        transcription = " ".join(segment.text for segment in segments)
+        logger.info(f"✅ Transcripción completada: {len(transcription)} caracteres")
+        return transcription.strip()
     except Exception as e:
-        logger.exception("Error en transcripción mock")
+        logger.exception(f"❌ Error en transcripción: {e}")
         return ""
 
 
-async def generar_diagnostico_mock(descripcion_texto: str, imagen_urls: List[str], transcripcion: Optional[str], vehiculo_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Genera un diagnóstico simulado basado en palabras clave.
-
-    Retorna un dict con: descripcion, nivel_confianza, fecha, incidentes: list of {concepto, nivel_confianza, sugerido_por}
+# ============================================================
+# 2. ANÁLISIS DE IMÁGENES CON CLIP (zero-shot)
+# ============================================================
+async def analyze_image(image_path: str, candidate_labels: List[str]) -> Dict[str, float]:
     """
-    texto = (descripcion_texto or "") + " " + (transcripcion or "")
-    texto_lower = texto.lower()
-    posibles = []
+    Analiza una imagen y devuelve probabilidades para cada concepto.
+    
+    Args:
+        image_path: Ruta a la imagen
+        candidate_labels: Lista de conceptos posibles (de la BD)
+    
+    Returns:
+        Diccionario {concepto: probabilidad}
+    """
+    model, preprocess = _get_clip_model()
+    if not model:
+        return {label: 0.0 for label in candidate_labels}
 
-    keywords = {
-        "llanta": ["llanta", "ponch", "pinch"],
-        "freno": ["freno", "frenos"],
-        "motor": ["motor", "no enciende", "calienta", "enciende"],
-        "bateria": ["bateria", "batería", "batt"],
-        "colision": ["choque", "colision", "accident", "colisión"],
-    }
+    try:
+        # Cargar imagen
+        if not os.path.exists(image_path):
+            if image_path.startswith("/static"):
+                image_path = "." + image_path
+            else:
+                raise FileNotFoundError(f"No se encuentra {image_path}")
+        
+        image = Image.open(image_path).convert("RGB")
+        device = next(model.parameters()).device
+        image_input = preprocess(image).unsqueeze(0).to(device)
 
-    for concepto, keys in keywords.items():
-        score = 0.0
-        for k in keys:
-            if k in texto_lower:
-                score += 0.8
-        if score > 0:
-            # normalize score
-            nivel = min(1.0, 0.6 + score * 0.1)
-            posibles.append({
-                "concepto": concepto,
-                "nivel_confianza": round(nivel, 4),
-                "sugerido_por": "ia"
-            })
+        # Preparar textos
+        text_tokens = clip.tokenize(candidate_labels).to(device)
 
-    # fallback: si no detectó nada, sugerir "desconocido" con baja confianza
-    if not posibles:
-        posibles.append({
-            "concepto": "desconocido",
-            "nivel_confianza": 0.5,
+        # Calcular similitud
+        with torch.no_grad():
+            image_features = model.encode_image(image_input)
+            text_features = model.encode_text(text_tokens)
+
+        # Normalizar y calcular probabilidades
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        similarity = (image_features @ text_features.T).squeeze(0)
+        probabilities = similarity.softmax(dim=-1)
+
+        result = {label: float(prob) for label, prob in zip(candidate_labels, probabilities)}
+        best_match = max(result, key=result.get)
+        logger.info(f"✅ Imagen analizada: {best_match} (confianza {result[best_match]:.2%})")
+        return result
+    except Exception as e:
+        logger.exception(f"❌ Error analizando imagen {image_path}: {e}")
+        return {label: 0.0 for label in candidate_labels}
+
+
+async def analyze_multiple_images(image_paths: List[str], candidate_labels: List[str]) -> List[Dict[str, float]]:
+    """Analiza varias imágenes en paralelo"""
+    results = []
+    for path in image_paths:
+        results.append(await analyze_image(path, candidate_labels))
+    return results
+
+
+# ============================================================
+# 3. GENERACIÓN DE DIAGNÓSTICO CON LLM (Groq API)
+# ============================================================
+async def generate_diagnosis(
+    description: str,
+    image_analysis: List[Dict[str, float]],
+    transcription: Optional[str],
+    vehicle_info: Optional[Dict[str, Any]],
+    valid_concepts: List[str]
+) -> Dict[str, Any]:
+    """
+    Genera un diagnóstico usando Groq API (Llama 3).
+    
+    Args:
+        description: Descripción del problema por el usuario
+        image_analysis: Resultados del análisis de imágenes con CLIP
+        transcription: Transcripción del audio (si hay)
+        vehicle_info: Información del vehículo
+        valid_concepts: Lista de conceptos válidos de la BD
+    
+    Returns:
+        {
+            "descripcion": str,
+            "nivel_confianza": float,
+            "incidentes": [{"concepto": str, "nivel_confianza": float, "sugerido_por": "ia"}]
+        }
+    """
+    if not GROQ_API_KEY or GROQ_API_KEY == "gsk_pon_tu_api_key_aqui":
+        raise ValueError(
+            "❌ GROQ_API_KEY no configurada. "
+            "Obtén tu key en: https://console.groq.com/keys"
+        )
+    
+    prompt = _build_prompt(description, image_analysis, transcription, vehicle_info, valid_concepts)
+    
+    try:
+        logger.info(f"🤖 Generando diagnóstico con Groq ({GROQ_MODEL})...")
+        loop = asyncio.get_event_loop()
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Eres un experto mecánico automotriz. Genera diagnósticos precisos en formato JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=1000,
+                top_p=0.9
+            )
+        )
+        
+        raw = response.choices[0].message.content
+        logger.info(f"✅ Respuesta Groq recibida ({len(raw)} chars)")
+        
+        diagnosis = _parse_llm_response(raw, valid_concepts)
+        diagnosis["fecha"] = datetime.utcnow()
+        return diagnosis
+        
+    except Exception as e:
+        logger.exception(f"❌ Error en Groq API: {e}")
+        # Fallback de emergencia
+        return {
+            "descripcion": "No se pudo generar diagnóstico automático. Verifica tu GROQ_API_KEY.",
+            "nivel_confianza": 0.0,
+            "incidentes": []
+        }
+
+
+def _build_prompt(desc, img_analysis, transc, vehicle_info, valid_concepts) -> str:
+    """Construye el prompt para el LLM"""
+    prompt = """Eres un experto mecánico automotriz. Genera un diagnóstico en JSON.
+
+### CONCEPTOS VÁLIDOS (solo usa estos nombres exactos):
+"""
+    prompt += ", ".join(valid_concepts) + "\n\n"
+
+    prompt += "### INFORMACIÓN DEL VEHÍCULO ###\n"
+    if vehicle_info:
+        prompt += f"- Matrícula: {vehicle_info.get('matricula', 'N/A')}\n"
+        prompt += f"- Marca/Modelo: {vehicle_info.get('marca', '')} {vehicle_info.get('modelo', '')}\n"
+        prompt += f"- Año: {vehicle_info.get('anio', 'N/A')}\n"
+    else:
+        prompt += "No disponible.\n"
+
+    prompt += "\n### DESCRIPCIÓN DEL CONDUCTOR ###\n"
+    prompt += desc if desc else "No hay descripción.\n"
+
+    prompt += "\n### TRANSCRIPCIÓN DE AUDIO ###\n"
+    prompt += transc if transc else "No hay audio.\n"
+
+    prompt += "\n### ANÁLISIS DE IMÁGENES (CLIP) ###\n"
+    if img_analysis:
+        for idx, anal in enumerate(img_analysis, 1):
+            best = max(anal.items(), key=lambda x: x[1])
+            prompt += f"- Imagen {idx}: {best[0]} (confianza {best[1]:.2%})\n"
+    else:
+        prompt += "No hay imágenes.\n"
+
+    prompt += """
+### INSTRUCCIONES ###
+Genera ÚNICAMENTE un JSON válido con esta estructura:
+{
+    "descripcion": "texto explicativo en español del diagnóstico",
+    "nivel_confianza": 0.85,
+    "incidentes": [
+        {"concepto": "nombre_exacto_de_la_lista", "nivel_confianza": 0.9, "sugerido_por": "ia"},
+        {"concepto": "otro_concepto_de_la_lista", "nivel_confianza": 0.8, "sugerido_por": "ia"}
+    ]
+}
+
+REGLAS IMPORTANTES:
+- Los conceptos DEBEN estar EXACTAMENTE en la lista de conceptos válidos
+- nivel_confianza general es el promedio de los niveles de los incidentes
+- No incluyas texto fuera del JSON
+- Si falta información, usa "informacion_insuficiente" (debe estar en la lista)
+
+### RESPUESTA (SOLO JSON): ###
+"""
+    return prompt
+
+
+def _parse_llm_response(raw: str, valid_concepts: List[str]) -> Dict[str, Any]:
+    """Parsea y valida la respuesta del LLM"""
+    import json
+    import re
+    
+    # Extraer JSON de la respuesta
+    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if not json_match:
+        logger.error("❌ No se encontró JSON en respuesta LLM")
+        return {
+            "descripcion": "Error de formato en respuesta IA",
+            "nivel_confianza": 0.0,
+            "incidentes": []
+        }
+    
+    try:
+        data = json.loads(json_match.group())
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON inválido: {e}")
+        return {
+            "descripcion": "Error parsing JSON",
+            "nivel_confianza": 0.0,
+            "incidentes": []
+        }
+
+    # Validar y filtrar incidentes
+    incidentes = []
+    for inc in data.get("incidentes", []):
+        concepto = inc.get("concepto", "")
+        if concepto not in valid_concepts:
+            logger.warning(f"⚠️ Concepto '{concepto}' no es válido, se ignora")
+            continue
+        incidentes.append({
+            "concepto": concepto,
+            "nivel_confianza": min(1.0, max(0.0, float(inc.get("nivel_confianza", 0.5)))),
             "sugerido_por": "ia"
         })
 
-    # nivel general = average
-    niveles = [Decimal(str(p["nivel_confianza"])) for p in posibles]
-    nivel_general = (sum(niveles) / Decimal(len(niveles))) if niveles else Decimal("0.0")
-
-    descripcion = "Diagnóstico generado por IA (mock)."
-    if vehiculo_info:
-        descripcion += f" Vehículo: {vehiculo_info.get('matricula', '')}."
-
+    # Calcular nivel de confianza general
+    if incidentes:
+        nivel_general = sum(inc["nivel_confianza"] for inc in incidentes) / len(incidentes)
+    else:
+        nivel_general = data.get("nivel_confianza", 0.0)
+    
     return {
-        "descripcion": descripcion,
-        "nivel_confianza": float(round(nivel_general, 4)),
-        "fecha": datetime.utcnow(),
-        "incidentes": posibles
+        "descripcion": data.get("descripcion", "Diagnóstico generado por IA"),
+        "nivel_confianza": float(nivel_general),
+        "incidentes": incidentes
     }
-
-
-# Adapter functions: use these from other modules. Currently delegate to mocks.
-USE_REAL_AI = os.environ.get("USE_REAL_AI", "false").lower() in ("1", "true", "yes")
-
-
-async def transcribe_audio(file_path: str) -> str:
-    """Adapter for audio transcription. If `USE_REAL_AI` is enabled, this
-    function should call the real provider. For now it delegates to the mock.
-    """
-    if USE_REAL_AI:
-        logger.debug("USE_REAL_AI enabled but no provider implemented; falling back to mock")
-        # future: call real provider here
-    return await transcribe_audio_mock(file_path)
-
-
-async def generar_diagnostico(descripcion_texto: str, imagen_urls: List[str], transcripcion: Optional[str], vehiculo_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Adapter for generating a multimodal diagnóstico. Delegates to mock.
-
-    Expected return dict keys: descripcion (str), nivel_confianza (float), fecha (datetime), incidentes (list[dict])
-    """
-    if USE_REAL_AI:
-        logger.debug("USE_REAL_AI enabled but no provider implemented; falling back to mock")
-        # future: call real provider here
-    return await generar_diagnostico_mock(descripcion_texto, imagen_urls, transcripcion, vehiculo_info)

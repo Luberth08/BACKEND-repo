@@ -14,6 +14,77 @@ router = APIRouter(prefix="/diagnosticos", tags=["Diagnósticos"])
 
 @router.post("/", response_model=SolicitudDiagnosticoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_solicitud(
+    descripcion: str = Form(..., min_length=5, description="Descripción del problema"),
+    ubicacion: str = Form(..., description="Ubicación en formato 'lat,lon'"),
+    matricula: Optional[str] = Form(None, description="Matrícula del vehículo"),
+    marca: Optional[str] = Form(None, description="Marca del vehículo"),
+    modelo: Optional[str] = Form(None, description="Modelo del vehículo"),
+    anio: Optional[int] = Form(None, description="Año del vehículo"),
+    color: Optional[str] = Form(None, description="Color del vehículo"),
+    tipo_vehiculo: Optional[str] = Form(None, description="Tipo de vehículo"),
+    foto1: Optional[UploadFile] = File(None, description="Primera foto (opcional)"),
+    foto2: Optional[UploadFile] = File(None, description="Segunda foto (opcional)"),
+    foto3: Optional[UploadFile] = File(None, description="Tercera foto (opcional)"),
+    audio: Optional[UploadFile] = File(None, description="Audio del problema (opcional)"),
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Crea una solicitud de diagnóstico con evidencias.
+    
+    - **descripcion**: Descripción del problema vehicular
+    - **ubicacion**: Coordenadas en formato "lat,lon" (ej: "-17.783333,-63.182222")
+    - **matricula**: Matrícula del vehículo (opcional)
+    - **foto1, foto2, foto3**: Hasta 3 fotos del problema (opcional)
+    - **audio**: Grabación de audio describiendo el problema (opcional)
+    """
+    # Recopilar fotos no vacías
+    fotos = []
+    for foto in [foto1, foto2, foto3]:
+        if foto and foto.filename:  # Verificar que el archivo no esté vacío
+            fotos.append(foto)
+    
+    # Validar número de fotos
+    if len(fotos) > 3:
+        raise HTTPException(status_code=400, detail="Máximo 3 fotos permitidas")
+
+    # Data vehiculo opcional
+    vehiculo_data = None
+    if matricula and (marca and modelo and anio):
+        vehiculo_data = {
+            "matricula": matricula, 
+            "marca": marca, 
+            "modelo": modelo, 
+            "anio": anio, 
+            "color": color, 
+            "tipo": tipo_vehiculo
+        }
+
+    try:
+        solicitud = await diagnostico_service.crear_solicitud_diagnostico(
+            db=db,
+            id_persona=current_persona.id,
+            descripcion=descripcion,
+            ubicacion_str=ubicacion,
+            matricula=matricula,
+            vehiculo_data=vehiculo_data,
+            fotos=fotos if fotos else None,
+            audio=audio if audio and audio.filename else None
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Convertir ubicacion a string para serialización
+    from geoalchemy2.shape import to_shape
+    if solicitud.ubicacion:
+        point = to_shape(solicitud.ubicacion)
+        solicitud.ubicacion = f"{point.y},{point.x}"
+    
+    return solicitud
+
+
+@router.post("/multiple-files", response_model=SolicitudDiagnosticoResponse, status_code=status.HTTP_201_CREATED)
+async def crear_solicitud_multiple_files(
     descripcion: str = Form(..., min_length=5),
     ubicacion: str = Form(...),
     matricula: Optional[str] = Form(None),
@@ -27,7 +98,10 @@ async def crear_solicitud(
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    """Crea una solicitud de diagnóstico con evidencias (hasta 3 fotos y 1 audio)."""
+    """
+    Endpoint alternativo para crear solicitud con múltiples archivos.
+    Usar este endpoint desde código/Postman, no desde Swagger UI.
+    """
     # Validaciones simples
     if fotos and len(fotos) > 3:
         raise HTTPException(status_code=400, detail="Máximo 3 fotos permitidas")

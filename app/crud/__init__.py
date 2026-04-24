@@ -15,3 +15,4 @@ from app.crud.crud_diagnostico import diagnostico
 from app.crud.crud_tipo_incidente import tipo_incidente
 from app.crud.crud_incidente import incidente 
 from app.crud.crud_categoria_incidente import categoria_incidente
+from app.crud.crud_configuracion_sistema import configuracion_sistema

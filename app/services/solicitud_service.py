@@ -30,7 +30,7 @@ async def _get_nombre_usuario(db: AsyncSession, id_usuario: int) -> str:
 
 async def create_solicitud(db: AsyncSession, id_usuario_solicita: int, data: SolicitudAfiliacionCreate) -> SolicitudAfiliacionResponse:
     # Validar que no exista un taller con el mismo nombre (aprobado)
-    existing_taller = await crud_taller.get_by_nombre(db, data.nombre)  # necesitas implementar get_by_nombre en crud_taller
+    existing_taller = await crud_taller.get_by_nombre(db, data.nombre)
     if existing_taller:
         raise HTTPException(status_code=400, detail="Ya existe un taller con ese nombre")
     # Convertir ubicación

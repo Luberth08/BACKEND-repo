@@ -19,3 +19,5 @@ from app.models.tipo_incidente import TipoIncidente
 from app.models.incidente import Incidente
 from app.models.evidencia import Evidencia
 from app.models.diagnostico import Diagnostico
+from app.models.configuracion_sistema import ConfiguracionSistema
+from app.models.requiere_especialidad import RequiereEspecialidad

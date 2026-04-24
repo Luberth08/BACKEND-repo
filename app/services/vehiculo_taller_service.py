@@ -8,7 +8,6 @@ from app.models.vehiculo_taller import EstadoVehiculoTaller, VehiculoTaller
 
 logger = logging.getLogger(__name__)
 
-
 class VehiculoTallerService:
     async def create(self, db: AsyncSession, id_taller: int, data: VehiculoTallerCreate, id_usuario_actual: int) -> VehiculoTaller:
         existing = await crud_vehiculo_taller.get_by_matricula(db, data.matricula)
