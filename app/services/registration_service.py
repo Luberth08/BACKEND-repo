@@ -49,10 +49,11 @@ async def complete_conductor_registration(db: AsyncSession, email: str, code: st
         raise InvalidOTPFlowError()
 
     # Crear persona (solo email)
-    async with db.begin():
-        persona = await create_persona(db, email)
+    persona = await create_persona(db, email)
+    await db.commit()
     delete_otp(email)
     access_token = await create_token_and_session(db, email, fcm_token)
+    await db.commit()
     logger.info(f"Nuevo conductor registrado: {email}")
     return TokenResponse(access_token=access_token)
 
@@ -103,29 +104,31 @@ async def complete_web_registration(db: AsyncSession, email: str, code: str) -> 
     # Datos personales proporcionados (sin email, username, password)
     persona_extra = {k: v for k, v in user_data.items() if k not in ["email", "username", "password"]}
 
-    async with db.begin():
-        if persona_exists and id_persona:
-            # Recuperar persona existente
-            persona = await crud_persona.get(db, id_persona)
-            if not persona:
-                raise PersonaNotFoundError()
-            # Actualizar persona con los datos opcionales (solo si hay datos)
-            if persona_extra:
-                persona = await update_persona_data(db, persona, persona_extra)
-        else:
-            # Crear nueva persona con los datos opcionales
-            persona = await create_persona(db, user_data["email"], persona_extra)
+    # No usar db.begin() aquí porque la transacción ya está activa
+    if persona_exists and id_persona:
+        # Recuperar persona existente
+        persona = await crud_persona.get(db, id_persona)
+        if not persona:
+            raise PersonaNotFoundError()
+        # Actualizar persona con los datos opcionales (solo si hay datos)
+        if persona_extra:
+            persona = await update_persona_data(db, persona, persona_extra)
+    else:
+        # Crear nueva persona con los datos opcionales
+        persona = await create_persona(db, user_data["email"], persona_extra)
 
-        # Crear usuario
-        nuevo_usuario = await create_usuario_from_persona(db, persona, user_data["username"], user_data["password"])
+    # Crear usuario
+    nuevo_usuario = await create_usuario_from_persona(db, persona, user_data["username"], user_data["password"])
 
-        # Asignar rol 'cliente'
-        rol = await crud_rol.get_by_nombre(db, ROL_CLIENTE)
-        if not rol:
-            raise RoleNotFoundError(ROL_CLIENTE)
-        await crud_rol_usuario.add_rol(db, nuevo_usuario.id, rol.id)
+    # Asignar rol 'cliente'
+    rol = await crud_rol.get_by_nombre(db, ROL_CLIENTE)
+    if not rol:
+        raise RoleNotFoundError(ROL_CLIENTE)
+    await crud_rol_usuario.add_rol(db, nuevo_usuario.id, rol.id)
 
+    await db.commit()
     delete_otp(email)
     access_token = await create_token_and_session(db, user_data["email"])
+    await db.commit()
     logger.info(f"Nuevo usuario web registrado: {user_data['email']}")
     return TokenResponse(access_token=access_token)
