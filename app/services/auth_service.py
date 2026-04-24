@@ -68,8 +68,9 @@ async def complete_conductor_login(db: AsyncSession, email: str, code: str, fcm_
 
     delete_otp(email)
 
-    async with db.begin():
-        access_token = await create_token_and_session(db, email, fcm_token)
+    # No usar db.begin() aquí porque la transacción ya está activa
+    access_token = await create_token_and_session(db, email, fcm_token)
+    await db.commit()
     logger.info(f"Conductor {email} ha iniciado sesión con OTP")
     return TokenResponse(access_token=access_token)
 
@@ -87,6 +88,7 @@ async def logout_user(db: AsyncSession, token: str) -> None:
     """
     Invalida la sesión activa del token.
     """
-    async with db.begin():
-        await invalidate_session(db, token)
+    # No usar db.begin() aquí porque la transacción ya está activa
+    await invalidate_session(db, token)
+    await db.commit()
     logger.info("Sesión cerrada")
