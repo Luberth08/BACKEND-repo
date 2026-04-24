@@ -13,7 +13,8 @@ from .endpoints import (
     especialidades,
     admin_categorias,
     admin_tipos,
-    vehiculos_taller
+    vehiculos_taller,
+    admin_configuracion
 )
 
 api_router = APIRouter()
@@ -31,3 +32,4 @@ api_router.include_router(especialidades.router, tags=["Especialidades"])
 api_router.include_router(admin_categorias.router, prefix="/admin/categorias", tags=["Admin - Categorías Incidente"])
 api_router.include_router(admin_tipos.router, prefix="/admin/tipos", tags=["Admin - Tipos Incidente"])
 api_router.include_router(vehiculos_taller.router, tags=["Vehículos Taller"])
+api_router.include_router(admin_configuracion.router, prefix="/admin/configuracion", tags=["Admin - Configuración"])

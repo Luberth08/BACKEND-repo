@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from typing import List, Tuple, Optional
 from app.crud.crud_tipo_incidente import tipo_incidente as crud_tipo
@@ -14,7 +15,8 @@ from app.schemas.tipo_incidente import (
 
 async def list_tipos(db: AsyncSession, skip: int = 0, limit: int = 10, id_categoria: Optional[int] = None) -> Tuple[List[TipoIncidenteResponse], int]:
     # contar con filtro
-    stmt = select(crud_tipo.model)
+    # evitar lazy-load en el bucle: precargar la relación `categoria`
+    stmt = select(crud_tipo.model).options(selectinload(crud_tipo.model.categoria))
     if id_categoria:
         stmt = stmt.where(crud_tipo.model.id_categoria_incidente == id_categoria)
     total_res = await db.execute(select(func.count()).select_from(stmt.subquery()))
@@ -23,9 +25,7 @@ async def list_tipos(db: AsyncSession, skip: int = 0, limit: int = 10, id_catego
     items = result.scalars().all()
     resp = []
     for t in items:
-        categoria_nombre = None
-        if t.categoria:
-            categoria_nombre = t.categoria.nombre
+        categoria_nombre = t.categoria.nombre if t.categoria else None
         resp.append(TipoIncidenteResponse(id=t.id, concepto=t.concepto, prioridad=t.prioridad, requiere_remolque=t.requiere_remolque, id_categoria_incidente=t.id_categoria_incidente, categoria_nombre=categoria_nombre))
     return resp, total
 
@@ -44,7 +44,11 @@ async def create_tipo(db: AsyncSession, data: TipoIncidenteCreate) -> TipoIncide
 
     obj = await crud_tipo.create(db, data.dict())
     await db.commit()
-    categoria_nombre = obj.categoria.nombre if obj.categoria else None
+    # evitar lazy-load; si validamos la categoría antes, consultarla directamente
+    categoria_nombre = None
+    if data.id_categoria_incidente:
+        cat = await crud_categoria.get(db, data.id_categoria_incidente)
+        categoria_nombre = cat.nombre if cat else None
     return TipoIncidenteResponse(id=obj.id, concepto=obj.concepto, prioridad=obj.prioridad, requiere_remolque=obj.requiere_remolque, id_categoria_incidente=obj.id_categoria_incidente, categoria_nombre=categoria_nombre)
 
 
@@ -66,7 +70,11 @@ async def update_tipo(db: AsyncSession, id: int, data: TipoIncidenteUpdate) -> T
     update_data = {k: v for k, v in data.dict().items() if v is not None}
     updated = await crud_tipo.update(db, obj, update_data)
     await db.commit()
-    categoria_nombre = updated.categoria.nombre if updated.categoria else None
+    # evitar lazy-load para la categoría
+    categoria_nombre = None
+    if updated.id_categoria_incidente:
+        cat = await crud_categoria.get(db, updated.id_categoria_incidente)
+        categoria_nombre = cat.nombre if cat else None
     return TipoIncidenteResponse(id=updated.id, concepto=updated.concepto, prioridad=updated.prioridad, requiere_remolque=updated.requiere_remolque, id_categoria_incidente=updated.id_categoria_incidente, categoria_nombre=categoria_nombre)
 
 

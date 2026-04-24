@@ -8,6 +8,7 @@ from app.services.categoria_incidente_service import (
     create_categoria,
     update_categoria,
     delete_categoria,
+    get_categoria_by_id,
 )
 from app.schemas.categoria_incidente import (
     CategoriaIncidenteResponse,
@@ -41,6 +42,16 @@ async def listar_categorias(
     await _require_admin_system(current_usuario, db)
     items, total = await list_categorias(db, skip, limit)
     return CategoriaIncidenteListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/{categoria_id}", response_model=CategoriaIncidenteResponse)
+async def obtener_categoria(
+    categoria_id: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_admin_system(current_usuario, db)
+    return await get_categoria_by_id(db, categoria_id)
 
 
 @router.post("/", response_model=CategoriaIncidenteResponse, status_code=status.HTTP_201_CREATED)

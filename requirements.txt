@@ -11,3 +11,10 @@ werkzeug #bcrypt
 python-multipart #OAuth2
 psycopg2-binary #sincrono
 shapely # convertir coordenadas a objetos
+
+# AI / ML
+torch>=2.0.0
+clip @ git+https://github.com/openai/CLIP.git
+faster-whisper>=0.10.0
+groq>=0.4.0    # Groq API para LLM
+Pillow>=10.0.0

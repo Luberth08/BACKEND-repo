@@ -10,3 +10,8 @@ class CategoriaIncidente(Base):
     nombre = Column(String(100), nullable=False, unique=True)
 
     tipos = relationship("TipoIncidente", back_populates="categoria")
+    especialidades = relationship(
+        "Especialidad",
+        secondary="requiere_especialidad",
+        back_populates="categorias"
+    )

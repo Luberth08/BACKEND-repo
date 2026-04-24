@@ -22,7 +22,7 @@ router = APIRouter(prefix="/especialidades", tags=["Especialidades"])
 @router.get("/", response_model=EspecialidadListResponse)
 async def listar_especialidades_endpoint(
     skip: int = Query(0, ge=0, description="Número de registros a saltar"),
-    limit: int = Query(10, ge=1, le=100, description="Registros por página"),
+    limit: int = Query(10, ge=1, le=1000, description="Registros por página"),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await list_especialidades(db, skip, limit)

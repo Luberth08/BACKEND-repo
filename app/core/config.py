@@ -18,7 +18,13 @@ class Settings(BaseSettings):
 
     BASE_URL: str
 
-    model_config = SettingsConfigDict(env_file=".env")
+    # IA Configuration
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    WHISPER_MODEL_SIZE: str = "base"
+    USE_REAL_AI: bool = True
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 @lru_cache
 def get_settings():

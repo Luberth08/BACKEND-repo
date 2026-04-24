@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from app.models.especialidad import Especialidad
 from app.models.tecnico_especialidad import TecnicoEspecialidad
 from app.crud.crud_especialidad import especialidad as crud_especialidad
+from app.crud.crud_requiere_especialidad import requiere_especialidad as crud_requiere
 from app.schemas.especialidad import (
     EspecialidadCreate,
     EspecialidadUpdate,
@@ -64,6 +65,14 @@ async def delete_especialidad(db: AsyncSession, id: int) -> None:
     relaciones = res.scalar_one()
     if relaciones and relaciones > 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se puede eliminar: existen técnicos asociados a esta especialidad")
+    
+    # Verificar relaciones en requiere_especialidad (categorías que requieren esta especialidad)
+    categorias = await crud_requiere.get_categorias_by_especialidad(db, id)
+    if categorias and len(categorias) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede eliminar: existen categorías de incidente que requieren esta especialidad"
+        )
 
     deleted = await crud_especialidad.delete(db, id)
     if not deleted:
