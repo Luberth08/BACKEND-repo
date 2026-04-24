@@ -21,5 +21,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
+@app.head("/")  # Permitir HEAD para health checks de Render
 async def root():
     return {"status": "Backend running", "project": settings.PROJECT_NAME}
