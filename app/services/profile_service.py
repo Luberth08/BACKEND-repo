@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud import persona as crud_persona, usuario as crud_usuario
 from app.core.security import get_password_hash
 from app.core.exceptions import InvalidOTPError
-from app.services.user_service import update_persona_data, update_usuario_data
+from app.services.user_service import update_persona_data, update_usuario_data, create_usuario_from_persona
 from app.services.otp_service import get_otp_data, delete_otp, send_otp_email_safe
 from app.crud.crud_sesion import sesion as crud_sesion
 from app.core.config import settings
@@ -41,6 +41,31 @@ async def update_profile(
     
     await db.commit()
 
+    return {"persona": persona, "usuario": usuario}
+
+async def create_usuario(
+    db: AsyncSession,
+    persona_id: int,
+    username: str,
+    password: str
+) -> Dict[str, Any]:
+    """
+    Crea un usuario para una persona que aún no tiene usuario.
+    """
+    # Obtener la persona
+    persona = await crud_persona.get(db, persona_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona no encontrada")
+    
+    # Verificar que no tenga usuario ya
+    existing_usuario = await crud_usuario.get_by_id_persona(db, persona_id)
+    if existing_usuario:
+        raise HTTPException(status_code=400, detail="Esta persona ya tiene un usuario")
+    
+    # Crear el usuario
+    usuario = await create_usuario_from_persona(db, persona, username, password)
+    await db.commit()
+    
     return {"persona": persona, "usuario": usuario}
 
 async def request_password_change_otp(

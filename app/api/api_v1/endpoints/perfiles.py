@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.perfil import UpdatePerfilRequest, PerfilResponse, RequestPasswordChangeRequest, ChangePasswordRequest
+from app.schemas.perfil import UpdatePerfilRequest, PerfilResponse, RequestPasswordChangeRequest, ChangePasswordRequest, CreateUsuarioRequest
 from app.services import profile_service
 from app.core.deps import get_current_persona
 from app.models.persona import Persona
@@ -45,6 +45,34 @@ async def update_my_profile(
         data=persona_update,
         username=req.username,
         url_img_perfil=req.url_img_perfil
+    )
+    persona = result["persona"]
+    usuario = result["usuario"]
+    return PerfilResponse(
+        email=persona.email,
+        username=usuario.nombre if usuario else None,
+        url_img_perfil=usuario.url_img_perfil if usuario else None,
+        nombre=persona.nombre,
+        apellido_p=persona.apellido_p,
+        apellido_m=persona.apellido_m,
+        ci=persona.ci,
+        complemento=persona.complemento,
+        telefono=persona.telefono,
+        direccion=persona.direccion,
+    )
+
+@router.post("/create-usuario", response_model=PerfilResponse, status_code=status.HTTP_201_CREATED)
+async def create_usuario(
+    req: CreateUsuarioRequest,
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """Crea un usuario (username + password) para la persona autenticada."""
+    result = await profile_service.create_usuario(
+        db=db,
+        persona_id=current_persona.id,
+        username=req.username,
+        password=req.password
     )
     persona = result["persona"]
     usuario = result["usuario"]

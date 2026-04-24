@@ -24,6 +24,10 @@ class PerfilResponse(BaseModel):
     telefono: Optional[str] = None
     direccion: Optional[str] = None
 
+class CreateUsuarioRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
 class RequestPasswordChangeRequest(BaseModel):
     email: EmailStr
 
