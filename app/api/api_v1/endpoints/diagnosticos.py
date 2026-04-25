@@ -224,10 +224,11 @@ async def asociar_tipo_incidente(
     return {"message": "Tipo de incidente asociado correctamente"}
 
 
-@router.delete("/{solicitud_id}/incidentes/{incidente_id}", status_code=204)
+@router.delete("/{solicitud_id}/incidentes/{id_diagnostico}/{id_tipo_incidente}", status_code=204)
 async def descartar_incidente(
     solicitud_id: int,
-    incidente_id: int,
+    id_diagnostico: int,
+    id_tipo_incidente: int,
     current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
@@ -242,12 +243,12 @@ async def descartar_incidente(
         raise HTTPException(status_code=400, detail="El diagnóstico no está disponible")
 
     # Verificar que el incidente pertenece a este diagnóstico
-    incidente = await incidente_crud.get(db, incidente_id)
+    incidente = await incidente_crud.get_by_diagnostico_and_tipo(db, id_diagnostico, id_tipo_incidente)
     if not incidente or incidente.id_diagnostico != solicitud.diagnostico.id:
         raise HTTPException(status_code=404, detail="Incidente no encontrado en este diagnóstico")
 
     # Eliminar el incidente
-    await incidente_crud.delete(db, incidente_id)
+    await db.delete(incidente)
     await db.commit()
     return None
 
