@@ -12,6 +12,15 @@ from decimal import Decimal
 router = APIRouter(prefix="/diagnosticos", tags=["Diagnósticos"])
 
 
+@router.get("/tipos-incidentes", response_model=list[dict])
+async def listar_tipos_incidentes_publico(
+    db: AsyncSession = Depends(get_db)
+):
+    """Lista todos los tipos de incidentes disponibles (endpoint público)"""
+    tipos = await tipo_incidente_crud.get_all(db)
+    return [{"id": t.id, "concepto": t.concepto, "prioridad": t.prioridad} for t in tipos]
+
+
 @router.post("/", response_model=SolicitudDiagnosticoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_solicitud(
     descripcion: str = Form(..., min_length=5, description="Descripción del problema"),
@@ -266,15 +275,6 @@ async def descartar_incidente(
     await db.delete(incidente)
     await db.commit()
     return None
-
-
-@router.get("/tipos-incidentes", response_model=list[dict])
-async def listar_tipos_incidentes_publico(
-    db: AsyncSession = Depends(get_db)
-):
-    """Lista todos los tipos de incidentes disponibles (endpoint público)"""
-    tipos = await tipo_incidente_crud.get_all(db)
-    return [{"id": t.id, "concepto": t.concepto, "prioridad": t.prioridad} for t in tipos]
 
 
 @router.post("/{solicitud_id}/reintentar", status_code=200)
