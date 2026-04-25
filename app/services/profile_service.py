@@ -132,10 +132,23 @@ async def upload_profile_picture(
     Guarda la foto de perfil en el sistema de archivos y actualiza la URL en la base de datos.
     Retorna la URL pública de la imagen.
     """
-    # Validar tipo de archivo
-    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Formato no permitido. Use JPEG o PNG.")
+    # Validar tipo de archivo (más flexible para aceptar variaciones de JPEG)
+    allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/pjpeg"]
+    file_extension = file.filename.split(".")[-1].lower() if file.filename else ""
+    allowed_extensions = ["jpg", "jpeg", "png"]
+    
+    # Validar por MIME type o por extensión
+    is_valid = (
+        file.content_type in allowed_types or 
+        file_extension in allowed_extensions or
+        (file.content_type and file.content_type.startswith("image/"))
+    )
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Formato no permitido. Use JPEG, JPG o PNG. Tipo recibido: {file.content_type}"
+        )
     
     # Obtener usuario actual
     usuario = await crud_usuario.get_by_id_persona(db, persona_id)
@@ -155,8 +168,16 @@ async def upload_profile_picture(
             # Si falla la eliminación, solo registra el error, no impide la subida
             print(f"Error al eliminar foto anterior: {e}")
 
+    # Normalizar extensión (convertir jpg a jpeg si es necesario)
+    if file_extension == "jpg":
+        extension = "jpeg"
+    elif file_extension in allowed_extensions:
+        extension = file_extension
+    else:
+        # Si no hay extensión válida, usar jpeg por defecto
+        extension = "jpeg"
+    
     # Generar nombre único
-    extension = file.filename.split(".")[-1]
     unique_name = f"{uuid.uuid4()}.{extension}"
     upload_dir = "static/uploads"
     os.makedirs(upload_dir, exist_ok=True)

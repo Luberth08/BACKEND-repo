@@ -65,7 +65,8 @@ def _send_otp_email_sync(email: str, otp: str) -> None:
         <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 20px auto; background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
             <tr>
                 <td style="padding: 30px 30px 20px 30px; text-align: center; background-color: #932D30; border-radius: 16px 16px 0 0;">
-                    <h1 style="margin: 0; color: #FFFFFF; font-size: 24px;">Plataforma de Asistencia Vehicular</h1>
+                    <h1 style="margin: 0; color: #FFFFFF; font-size: 24px;">SmartAssist</h1>
+                    <p style="margin: 5px 0 0 0; color: #F5F2EB; font-size: 14px;">Plataforma de Asistencia Vehicular</p>
                 </td>
             </tr>
             <tr>
@@ -78,7 +79,7 @@ def _send_otp_email_sync(email: str, otp: str) -> None:
                     <p style="color: #2C2C2C; font-size: 16px; line-height: 1.5;">Este código expira en <strong>{OTP_EXPIRE_MINUTES} minutos</strong>.</p>
                     <p style="color: #2C2C2C; font-size: 16px; line-height: 1.5;">Si no solicitaste este código, ignora este mensaje.</p>
                     <hr style="border: none; border-top: 1px solid #B76369; margin: 30px 0;">
-                    <p style="color: #52341A; font-size: 12px; text-align: center;">© 2025 Plataforma de Asistencia Vehicular. Todos los derechos reservados.</p>
+                    <p style="color: #52341A; font-size: 12px; text-align: center;">© 2025 SmartAssist. Todos los derechos reservados.</p>
                 </td>
             </tr>
         </table>
@@ -86,9 +87,9 @@ def _send_otp_email_sync(email: str, otp: str) -> None:
     </html>
     """
     
-    # Crear mensaje
+    # Crear mensaje con nombre personalizado en el remitente
     msg = MIMEMultipart()
-    msg["From"] = settings.SMTP_FROM
+    msg["From"] = f"SmartAssist <{settings.SMTP_FROM}>"
     msg["To"] = email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "html"))
