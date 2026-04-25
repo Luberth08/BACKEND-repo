@@ -14,7 +14,7 @@ class EvidenciaResponse(BaseModel):
 
 
 class IncidenteResponse(BaseModel):
-    id: int
+    id_diagnostico: int
     id_tipo_incidente: int
     concepto: Optional[str] = None
     nivel_confianza: float
@@ -26,7 +26,7 @@ class IncidenteResponse(BaseModel):
         if hasattr(values, '__dict__'):
             obj = values
             return {
-                'id': obj.id,
+                'id_diagnostico': obj.id_diagnostico,
                 'id_tipo_incidente': obj.id_tipo_incidente,
                 'concepto': obj.tipo_incidente.concepto if hasattr(obj, 'tipo_incidente') and obj.tipo_incidente else 'desconocido',
                 'nivel_confianza': float(obj.nivel_confianza),
