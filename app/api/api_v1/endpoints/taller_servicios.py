@@ -274,11 +274,11 @@ async def aceptar_solicitud(
         tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
         tecnicos_response = []
         for asignacion in tecnicos_asignados:
-            empleado = await empleado_crud.get(db, asignacion.id_empleado)
+            empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
             if empleado:
                 tecnicos_response.append(TecnicoAsignadoResponse(
                     id_empleado=empleado.id,
-                    nombre_completo=f"{empleado.nombre} {empleado.apellido}"
+                    nombre_completo=empleado.usuario.nombre
                 ))
         
         # Obtener vehículos asignados

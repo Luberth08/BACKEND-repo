@@ -77,7 +77,7 @@ async def obtener_tecnicos_disponibles(
     """
     # Obtener empleados con rol "tecnico" en el taller
     result = await db.execute(
-        select(Empleado).join(
+        select(Empleado).distinct().join(
             Usuario, Usuario.id == Empleado.id_usuario
         ).join(
             RolUsuario, RolUsuario.id_usuario == Usuario.id
