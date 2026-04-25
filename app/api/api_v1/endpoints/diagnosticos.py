@@ -270,9 +270,10 @@ async def descartar_incidente(
 
 @router.get("/tipos-incidentes", response_model=list[dict])
 async def listar_tipos_incidentes_publico(
+    current_persona: Persona = Depends(get_current_persona),
     db: AsyncSession = Depends(get_db)
 ):
-    """Lista todos los tipos de incidentes disponibles (endpoint público)"""
+    """Lista todos los tipos de incidentes disponibles"""
     tipos = await tipo_incidente_crud.get_all(db)
     return [{"id": t.id, "concepto": t.concepto, "prioridad": t.prioridad} for t in tipos]
 
