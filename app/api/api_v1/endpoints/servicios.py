@@ -303,6 +303,8 @@ async def obtener_servicio_actual(
     from app.models.servicio import EstadoServicio
     from app.models.solicitud_servicio import SolicitudServicio
     
+    print(f"🔍 DEBUG: Buscando servicio actual para persona_id={current_persona.id}")
+    
     # Buscar servicios activos del cliente a través de sus diagnósticos
     result = await db.execute(
         select(servicio_crud.model)
@@ -317,8 +319,22 @@ async def obtener_servicio_actual(
     )
     
     servicio = result.scalars().first()
+    print(f"📋 DEBUG: Servicio encontrado: {servicio.id if servicio else 'None'}")
     
     if not servicio:
+        # DEBUG: Buscar TODOS los servicios del usuario para ver qué hay
+        debug_result = await db.execute(
+            select(servicio_crud.model)
+            .join(SolicitudServicio, SolicitudServicio.id == servicio_crud.model.id_solicitud_servicio)
+            .join(diagnostico_crud.model, diagnostico_crud.model.id == SolicitudServicio.id_diagnostico)
+            .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
+            .where(solicitud_diagnostico_crud.model.id_persona == current_persona.id)
+            .order_by(servicio_crud.model.fecha.desc())
+        )
+        todos_servicios = debug_result.scalars().all()
+        print(f"🔍 DEBUG: Total servicios del usuario: {len(todos_servicios)}")
+        for s in todos_servicios:
+            print(f"  - Servicio {s.id}: estado={s.estado.value}, fecha={s.fecha}")
         return None
     
     # Obtener información del taller
@@ -333,7 +349,7 @@ async def obtener_servicio_actual(
         nombre=taller.nombre,
         telefono=taller.telefono,
         email=taller.email,
-        direccion=taller.direccion,
+        direccion=None,  # Taller model doesn't have direccion field
         ubicacion=taller_ubicacion,
         puntos=float(taller.puntos)
     )
@@ -478,7 +494,7 @@ async def obtener_detalle_servicio_cliente(
         nombre=taller.nombre,
         telefono=taller.telefono,
         email=taller.email,
-        direccion=taller.direccion,
+        direccion=None,  # Taller model doesn't have direccion field
         ubicacion=taller_ubicacion,
         puntos=float(taller.puntos)
     )
@@ -553,6 +569,8 @@ async def debug_todos_mis_servicios(
     from app.models.servicio import EstadoServicio
     from app.models.solicitud_servicio import SolicitudServicio
     
+    print(f"🔍 DEBUG ENDPOINT: Consultando servicios para persona_id={current_persona.id}")
+    
     # Buscar TODOS los servicios del cliente
     result = await db.execute(
         select(servicio_crud.model)
@@ -566,6 +584,7 @@ async def debug_todos_mis_servicios(
     )
     
     servicios = result.scalars().all()
+    print(f"📊 DEBUG: Encontrados {len(servicios)} servicios")
     
     resultado = []
     for servicio in servicios:
@@ -576,18 +595,24 @@ async def debug_todos_mis_servicios(
         solicitud = await solicitud_servicio_crud.get(db, servicio.id_solicitud_servicio)
         diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
         
-        resultado.append({
+        servicio_info = {
             "servicio_id": servicio.id,
             "estado": servicio.estado.value,
             "fecha": servicio.fecha.isoformat(),
             "taller_nombre": taller.nombre,
             "solicitud_id": servicio.id_solicitud_servicio,
+            "solicitud_estado": solicitud.estado.value if solicitud else None,
             "diagnostico_id": solicitud.id_diagnostico if solicitud else None,
-            "diagnostico_descripcion": diagnostico.descripcion if diagnostico else None
-        })
+            "diagnostico_descripcion": diagnostico.descripcion if diagnostico else None,
+            "es_activo": servicio.estado in [EstadoServicio.creado, EstadoServicio.en_proceso]
+        }
+        
+        print(f"  - Servicio {servicio.id}: {servicio_info}")
+        resultado.append(servicio_info)
     
     return {
         "persona_id": current_persona.id,
         "total_servicios": len(resultado),
+        "servicios_activos": len([s for s in resultado if s["es_activo"]]),
         "servicios": resultado
     }
