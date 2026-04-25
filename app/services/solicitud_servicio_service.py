@@ -51,7 +51,9 @@ async def obtener_especialidades_requeridas(
 ) -> List[int]:
     """
     Obtiene las especialidades requeridas basándose en los tipos de incidentes
-    asociados al diagnóstico
+    asociados al diagnóstico.
+    
+    Flujo: diagnostico → incidente → tipo_incidente → categoria_incidente → requiere_especialidad → especialidad
     """
     # Obtener los tipos de incidentes del diagnóstico
     result = await db.execute(
@@ -63,10 +65,26 @@ async def obtener_especialidades_requeridas(
     if not tipo_incidente_ids:
         return []
     
-    # Obtener las especialidades requeridas por estos tipos de incidentes
+    # Obtener las categorías de incidentes de estos tipos
+    result = await db.execute(
+        select(TipoIncidente.id_categoria_incidente)
+        .where(
+            and_(
+                TipoIncidente.id.in_(tipo_incidente_ids),
+                TipoIncidente.id_categoria_incidente.isnot(None)
+            )
+        )
+        .distinct()
+    )
+    categoria_ids = [row[0] for row in result.all()]
+    
+    if not categoria_ids:
+        return []
+    
+    # Obtener las especialidades requeridas por estas categorías
     result = await db.execute(
         select(RequiereEspecialidad.id_especialidad)
-        .where(RequiereEspecialidad.id_tipo_incidente.in_(tipo_incidente_ids))
+        .where(RequiereEspecialidad.id_categoria_incidente.in_(categoria_ids))
         .distinct()
     )
     especialidad_ids = [row[0] for row in result.all()]
