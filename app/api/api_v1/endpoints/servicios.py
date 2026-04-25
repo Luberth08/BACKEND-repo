@@ -209,3 +209,64 @@ async def cancelar_solicitud_servicio(
     await db.commit()
     
     return None
+
+
+@router.patch("/{solicitud_id}/comentario", status_code=status.HTTP_200_OK)
+async def actualizar_comentario(
+    solicitud_id: int,
+    comentario: str = Form(...),
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Actualiza el comentario de una solicitud de servicio existente
+    """
+    solicitud = await solicitud_servicio_crud.get(db, solicitud_id)
+    if not solicitud:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    
+    # Verificar que pertenece al usuario
+    diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
+    solicitud_diag = await solicitud_diagnostico_crud.get(db, diagnostico.id_solicitud_diagnostico)
+    
+    if solicitud_diag.id_persona != current_persona.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    
+    # Actualizar comentario
+    solicitud.comentario = comentario.strip() if comentario else None
+    await db.commit()
+    await db.refresh(solicitud)
+    
+    # Convertir ubicacion a string
+    if solicitud.ubicacion:
+        point = to_shape(solicitud.ubicacion)
+        solicitud.ubicacion = f"{point.y},{point.x}"
+    
+    return solicitud
+
+
+@router.get("/taller/{taller_id}/ubicacion")
+async def obtener_ubicacion_taller(
+    taller_id: int,
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene la ubicación de un taller para mostrar en el mapa
+    """
+    taller = await taller_crud.get(db, taller_id)
+    if not taller:
+        raise HTTPException(status_code=404, detail="Taller no encontrado")
+    
+    # Convertir ubicacion a string
+    if taller.ubicacion:
+        point = to_shape(taller.ubicacion)
+        return {
+            "id": taller.id,
+            "nombre": taller.nombre,
+            "ubicacion": f"{point.y},{point.x}",  # lat,lon
+            "telefono": taller.telefono,
+            "email": taller.email
+        }
+    
+    raise HTTPException(status_code=404, detail="El taller no tiene ubicación registrada")
