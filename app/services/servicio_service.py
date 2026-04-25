@@ -148,7 +148,8 @@ async def aceptar_solicitud_servicio(
     vehiculos_ids: List[int]
 ) -> Servicio:
     """
-    Acepta una solicitud de servicio y crea un servicio con técnicos y vehículos asignados
+    Acepta una solicitud de servicio y crea un servicio con técnicos y vehículos asignados.
+    También cancela automáticamente todas las demás solicitudes del mismo diagnóstico hacia otros talleres.
     """
     # Verificar que la solicitud existe y pertenece al taller
     solicitud = await solicitud_servicio_crud.get(db, id_solicitud)
@@ -231,6 +232,30 @@ async def aceptar_solicitud_servicio(
         id_solicitud, 
         EstadoSolicitudServicio.aceptada
     )
+    
+    # CANCELAR TODAS LAS DEMÁS SOLICITUDES DEL MISMO DIAGNÓSTICO
+    # Obtener el id_diagnostico de la solicitud aceptada
+    id_diagnostico = solicitud.id_diagnostico
+    
+    if id_diagnostico:
+        # Buscar todas las solicitudes pendientes del mismo diagnóstico (excepto la actual)
+        result = await db.execute(
+            select(SolicitudServicio).where(
+                and_(
+                    SolicitudServicio.id_diagnostico == id_diagnostico,
+                    SolicitudServicio.id != id_solicitud,
+                    SolicitudServicio.estado == EstadoSolicitudServicio.pendiente
+                )
+            )
+        )
+        
+        solicitudes_a_cancelar = result.scalars().all()
+        
+        # Cancelar cada solicitud
+        for sol in solicitudes_a_cancelar:
+            sol.estado = EstadoSolicitudServicio.cancelada
+        
+        logger.info(f"Se cancelaron {len(solicitudes_a_cancelar)} solicitudes del diagnóstico {id_diagnostico}")
     
     await db.commit()
     await db.refresh(servicio)
