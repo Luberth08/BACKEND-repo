@@ -8,6 +8,7 @@ from geoalchemy2.shape import to_shape
 
 from app.db.session import get_db
 from app.core.deps import get_current_usuario, require_permiso_en_taller
+from app.core.config import settings
 from app.models.usuario import Usuario
 from app.schemas.servicio import (
     SolicitudServicioListResponse,
@@ -167,9 +168,18 @@ async def obtener_detalle_solicitud(
         )
         evidencias = result.scalars().all()
         for evidencia in evidencias:
+            # Construir URL completa con BASE_URL
+            url_completa = evidencia.url
+            if not url_completa.startswith('http'):
+                # Si la URL es relativa, agregar BASE_URL
+                if url_completa.startswith('/'):
+                    url_completa = f"{settings.BASE_URL}{url_completa}"
+                else:
+                    url_completa = f"{settings.BASE_URL}/{url_completa}"
+            
             evidencias_list.append(EvidenciaDetalleResponse(
                 id=evidencia.id,
-                url=evidencia.url,
+                url=url_completa,
                 tipo=evidencia.tipo.value,
                 transcripcion=evidencia.transcripcion
             ))
