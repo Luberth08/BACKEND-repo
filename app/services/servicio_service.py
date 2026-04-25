@@ -5,6 +5,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 from geoalchemy2.shape import to_shape
 
@@ -88,7 +89,7 @@ async def obtener_tecnicos_disponibles(
                 Rol.nombre == "tecnico",
                 Empleado.estado == EstadoEmpleado.disponible
             )
-        )
+        ).options(selectinload(Empleado.usuario))
     )
     
     empleados = result.scalars().all()
@@ -112,7 +113,7 @@ async def obtener_tecnicos_disponibles(
         
         tecnicos_info.append({
             'id': empleado.id,
-            'nombre_completo': f"{empleado.nombre} {empleado.apellido}",
+            'nombre_completo': empleado.usuario.nombre,
             'especialidades': especialidades,
             'estado': empleado.estado.value
         })
