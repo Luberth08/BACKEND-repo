@@ -362,11 +362,11 @@ async def listar_servicios_en_proceso(
         tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
         tecnicos_response = []
         for asignacion in tecnicos_asignados:
-            empleado = await empleado_crud.get(db, asignacion.id_empleado)
+            empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
             if empleado:
                 tecnicos_response.append(TecnicoAsignadoResponse(
                     id_empleado=empleado.id,
-                    nombre_completo=f"{empleado.nombre} {empleado.apellido}"
+                    nombre_completo=empleado.usuario.nombre
                 ))
         
         # Vehículos
@@ -429,11 +429,11 @@ async def listar_servicios_historico(
         tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
         tecnicos_response = []
         for asignacion in tecnicos_asignados:
-            empleado = await empleado_crud.get(db, asignacion.id_empleado)
+            empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
             if empleado:
                 tecnicos_response.append(TecnicoAsignadoResponse(
                     id_empleado=empleado.id,
-                    nombre_completo=f"{empleado.nombre} {empleado.apellido}"
+                    nombre_completo=empleado.usuario.nombre
                 ))
         
         vehiculos_asignados = await servicio_vehiculo_crud.get_by_servicio(db, servicio.id)
@@ -483,11 +483,11 @@ async def completar_servicio(
         tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
         tecnicos_response = []
         for asignacion in tecnicos_asignados:
-            empleado = await empleado_crud.get(db, asignacion.id_empleado)
+            empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
             if empleado:
                 tecnicos_response.append(TecnicoAsignadoResponse(
                     id_empleado=empleado.id,
-                    nombre_completo=f"{empleado.nombre} {empleado.apellido}"
+                    nombre_completo=empleado.usuario.nombre
                 ))
         
         vehiculos_asignados = await servicio_vehiculo_crud.get_by_servicio(db, servicio.id)
@@ -542,11 +542,11 @@ async def obtener_detalle_servicio(
     tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
     tecnicos_response = []
     for asignacion in tecnicos_asignados:
-        empleado = await empleado_crud.get(db, asignacion.id_empleado)
+        empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
         if empleado:
             tecnicos_response.append(TecnicoAsignadoResponse(
                 id_empleado=empleado.id,
-                nombre_completo=f"{empleado.nombre} {empleado.apellido}"
+                nombre_completo=empleado.usuario.nombre
             ))
     
     vehiculos_asignados = await servicio_vehiculo_crud.get_by_servicio(db, servicio.id)

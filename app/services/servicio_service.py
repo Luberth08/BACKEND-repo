@@ -89,7 +89,7 @@ async def obtener_tecnicos_disponibles(
                 Rol.nombre == "tecnico",
                 Empleado.estado == EstadoEmpleado.disponible
             )
-        ).options(selectinload(Empleado.usuario))
+        ).options(selectinload(Empleado.usuario)).distinct()
     )
     
     empleados = result.scalars().all()
