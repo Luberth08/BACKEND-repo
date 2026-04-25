@@ -27,6 +27,7 @@ class Taller(Base):
 
     # Relaciones
     solicitud = relationship("SolicitudAfiliacion", back_populates="taller")
+    solicitudes_servicio = relationship("SolicitudServicio", back_populates="taller")
 
     # restricciones
     __table_args__ = (

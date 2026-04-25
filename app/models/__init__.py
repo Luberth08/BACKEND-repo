@@ -21,3 +21,4 @@ from app.models.evidencia import Evidencia
 from app.models.diagnostico import Diagnostico
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.requiere_especialidad import RequiereEspecialidad
+from app.models.solicitud_servicio import SolicitudServicio

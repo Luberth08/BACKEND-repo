@@ -14,6 +14,7 @@ class Diagnostico(Base):
 
     solicitud = relationship("SolicitudDiagnostico", back_populates="diagnostico")
     incidentes = relationship("Incidente", back_populates="diagnostico", cascade="all, delete-orphan")
+    solicitudes_servicio = relationship("SolicitudServicio", back_populates="diagnostico")
 
     __table_args__ = (
         CheckConstraint('nivel_confianza >= 0 AND nivel_confianza <= 1', name='check_nivel_confianza_diagnostico'),
