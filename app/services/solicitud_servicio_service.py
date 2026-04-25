@@ -254,7 +254,8 @@ async def crear_solicitudes_servicio_automaticas(
                 'ubicacion': solicitud_diag.ubicacion,
                 'sugerido_por': SugeridoPorTipo.ia,
                 'id_taller': taller.id,
-                'id_diagnostico': id_diagnostico
+                'id_diagnostico': id_diagnostico,
+                'distancia_km': taller_info['distancia_km']
             }
             
             await solicitud_servicio_crud.create(db, solicitud_data)
@@ -311,13 +312,25 @@ async def crear_solicitud_servicio_manual(
     if existe:
         raise ValueError("Ya existe una solicitud de servicio para este taller")
     
+    # Calcular distancia entre cliente y taller
+    distancia_km = None
+    if solicitud_diag.ubicacion and taller.ubicacion:
+        from geoalchemy2 import func as geo_func
+        result = await db.execute(
+            select(geo_func.ST_Distance(solicitud_diag.ubicacion, taller.ubicacion))
+        )
+        distancia = result.scalar()
+        if distancia:
+            distancia_km = round(distancia / 1000, 2)
+    
     # Crear solicitud
     solicitud_data = {
         'ubicacion': solicitud_diag.ubicacion,
         'comentario': comentario,
         'sugerido_por': SugeridoPorTipo.conductor,
         'id_taller': id_taller,
-        'id_diagnostico': id_diagnostico
+        'id_diagnostico': id_diagnostico,
+        'distancia_km': distancia_km
     }
     
     solicitud = await solicitud_servicio_crud.create(db, solicitud_data)

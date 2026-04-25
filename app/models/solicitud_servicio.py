@@ -30,6 +30,7 @@ class SolicitudServicio(Base):
     estado = Column(SQLEnum(EstadoSolicitudServicio), nullable=False, default=EstadoSolicitudServicio.pendiente)
     fecha_aceptada = Column(TIMESTAMP, nullable=True)
     costo_estimado = Column(DECIMAL(10, 2), nullable=True)
+    distancia_km = Column(DECIMAL(10, 2), nullable=True)
     sugerido_por = Column(SQLEnum(SugeridoPorTipo), nullable=False)
     id_taller = Column(Integer, ForeignKey("taller.id", ondelete="RESTRICT"), nullable=False)
     id_diagnostico = Column(Integer, ForeignKey("diagnostico.id", ondelete="RESTRICT"), nullable=False)
@@ -37,6 +38,7 @@ class SolicitudServicio(Base):
     # Relaciones
     taller = relationship("Taller", back_populates="solicitudes_servicio")
     diagnostico = relationship("Diagnostico", back_populates="solicitudes_servicio")
+    servicio = relationship("Servicio", back_populates="solicitud_servicio", uselist=False)
 
     # Constraints
     __table_args__ = (
