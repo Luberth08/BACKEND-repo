@@ -22,3 +22,6 @@ from app.models.diagnostico import Diagnostico
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.requiere_especialidad import RequiereEspecialidad
 from app.models.solicitud_servicio import SolicitudServicio
+from app.models.servicio import Servicio
+from app.models.servicio_tecnico import ServicioTecnico
+from app.models.servicio_vehiculo import ServicioVehiculo

@@ -17,3 +17,7 @@ from app.crud.crud_incidente import incidente
 from app.crud.crud_categoria_incidente import categoria_incidente
 from app.crud.crud_configuracion_sistema import configuracion_sistema
 from app.crud.crud_solicitud_servicio import solicitud_servicio
+from app.crud.crud_servicio import servicio
+from app.crud.crud_servicio_tecnico import servicio_tecnico
+from app.crud.crud_servicio_vehiculo import servicio_vehiculo
+from app.crud.crud_empleado import empleado
