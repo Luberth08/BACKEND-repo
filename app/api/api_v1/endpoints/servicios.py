@@ -536,3 +536,58 @@ async def obtener_detalle_servicio_cliente(
         ubicacion_cliente=ubicacion_cliente,
         diagnostico=diagnostico_response
     )
+
+
+# ============================================================
+# ENDPOINT TEMPORAL PARA DEBUG
+# ============================================================
+
+@router.get("/debug/mis-servicios-todos")
+async def debug_todos_mis_servicios(
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    TEMPORAL: Muestra TODOS los servicios del cliente para debug
+    """
+    from app.models.servicio import EstadoServicio
+    from app.models.solicitud_servicio import SolicitudServicio
+    
+    # Buscar TODOS los servicios del cliente
+    result = await db.execute(
+        select(servicio_crud.model)
+        .join(SolicitudServicio, SolicitudServicio.id == servicio_crud.model.id_solicitud_servicio)
+        .join(diagnostico_crud.model, diagnostico_crud.model.id == SolicitudServicio.id_diagnostico)
+        .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
+        .where(
+            solicitud_diagnostico_crud.model.id_persona == current_persona.id
+        )
+        .order_by(servicio_crud.model.fecha.desc())
+    )
+    
+    servicios = result.scalars().all()
+    
+    resultado = []
+    for servicio in servicios:
+        # Obtener taller
+        taller = await taller_crud.get(db, servicio.id_taller)
+        
+        # Obtener solicitud y diagnóstico
+        solicitud = await solicitud_servicio_crud.get(db, servicio.id_solicitud_servicio)
+        diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
+        
+        resultado.append({
+            "servicio_id": servicio.id,
+            "estado": servicio.estado.value,
+            "fecha": servicio.fecha.isoformat(),
+            "taller_nombre": taller.nombre,
+            "solicitud_id": servicio.id_solicitud_servicio,
+            "diagnostico_id": solicitud.id_diagnostico if solicitud else None,
+            "diagnostico_descripcion": diagnostico.descripcion if diagnostico else None
+        })
+    
+    return {
+        "persona_id": current_persona.id,
+        "total_servicios": len(resultado),
+        "servicios": resultado
+    }
