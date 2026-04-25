@@ -134,6 +134,14 @@ async def listar_mis_solicitudes(
     db: AsyncSession = Depends(get_db)
 ):
     items, _ = await solicitud_crud.get_by_persona_paginated(db, current_persona.id, 0, 100)
+    
+    # Convertir ubicaciones a string para serialización
+    from geoalchemy2.shape import to_shape
+    for solicitud in items:
+        if solicitud.ubicacion:
+            point = to_shape(solicitud.ubicacion)
+            solicitud.ubicacion = f"{point.y},{point.x}"
+    
     return items
 
 
@@ -144,6 +152,13 @@ async def obtener_solicitud(solicitud_id: int, current_persona: Persona = Depend
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     if solicitud.id_persona != current_persona.id:
         raise HTTPException(status_code=403, detail="No autorizado")
+    
+    # Convertir ubicacion a string para serialización
+    from geoalchemy2.shape import to_shape
+    if solicitud.ubicacion:
+        point = to_shape(solicitud.ubicacion)
+        solicitud.ubicacion = f"{point.y},{point.x}"
+    
     return solicitud
 
 
