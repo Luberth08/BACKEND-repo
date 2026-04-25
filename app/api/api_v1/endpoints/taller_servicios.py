@@ -159,7 +159,13 @@ async def obtener_detalle_solicitud(
     # Obtener evidencias (fotos y audio)
     evidencias_list = []
     if solicitud_diag:
-        evidencias = await evidencia_crud.get_by_solicitud(db, solicitud_diag.id)
+        from sqlalchemy import select
+        result = await db.execute(
+            select(evidencia_crud.model).where(
+                evidencia_crud.model.id_solicitud_diagnostico == solicitud_diag.id
+            )
+        )
+        evidencias = result.scalars().all()
         for evidencia in evidencias:
             evidencias_list.append(EvidenciaDetalleResponse(
                 id=evidencia.id,
