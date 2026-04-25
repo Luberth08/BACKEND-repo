@@ -144,3 +144,58 @@ class SolicitudServicioListResponse(BaseModel):
     
     class Config:
         orm_mode = True
+
+
+# ============================================================
+# SCHEMAS PARA CLIENTE (VISTA MÓVIL)
+# ============================================================
+
+class TallerInfoResponse(BaseModel):
+    """Información básica del taller para el cliente"""
+    id: int
+    nombre: str
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    direccion: Optional[str] = None
+    ubicacion: Optional[str] = None  # "lat,lon"
+    puntos: float
+    
+    class Config:
+        orm_mode = True
+
+
+class ServicioClienteResponse(BaseModel):
+    """Schema completo del servicio para el cliente móvil"""
+    id: int
+    fecha: datetime
+    estado: str
+    
+    # Información del taller
+    taller: TallerInfoResponse
+    
+    # Técnicos asignados
+    tecnicos_asignados: List[TecnicoAsignadoResponse] = []
+    
+    # Vehículos del taller asignados
+    vehiculos_asignados: List[VehiculoAsignadoResponse] = []
+    
+    # Ubicación del cliente (de la solicitud original)
+    ubicacion_cliente: Optional[str] = None  # "lat,lon"
+    
+    # Información del diagnóstico
+    diagnostico: Optional[DiagnosticoDetalleResponse] = None
+    
+    class Config:
+        orm_mode = True
+
+
+class ServicioClienteListResponse(BaseModel):
+    """Schema resumido para listar servicios del cliente"""
+    id: int
+    fecha: datetime
+    estado: str
+    taller_nombre: str
+    diagnostico_descripcion: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
