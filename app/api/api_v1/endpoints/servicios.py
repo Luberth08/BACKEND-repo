@@ -10,14 +10,28 @@ from app.schemas.solicitud_servicio import (
     TallerSugeridoResponse,
     TallerBasicInfo
 )
+from app.schemas.servicio import (
+    ServicioClienteResponse,
+    ServicioClienteListResponse,
+    TallerInfoResponse,
+    TecnicoAsignadoResponse,
+    VehiculoAsignadoResponse,
+    DiagnosticoDetalleResponse
+)
 from app.services import solicitud_servicio_service
 from app.crud import (
     solicitud_servicio as solicitud_servicio_crud,
     diagnostico as diagnostico_crud,
     solicitud_diagnostico as solicitud_diagnostico_crud,
-    taller as taller_crud
+    taller as taller_crud,
+    servicio as servicio_crud,
+    servicio_tecnico as servicio_tecnico_crud,
+    servicio_vehiculo as servicio_vehiculo_crud,
+    empleado as empleado_crud
 )
+from app.models.vehiculo_taller import VehiculoTaller
 from geoalchemy2.shape import to_shape
+from sqlalchemy import select
 
 router = APIRouter(prefix="/servicios", tags=["Servicios"])
 
@@ -270,3 +284,255 @@ async def obtener_ubicacion_taller(
         }
     
     raise HTTPException(status_code=404, detail="El taller no tiene ubicación registrada")
+
+
+
+# ============================================================
+# ENDPOINTS PARA CLIENTE MÓVIL - SERVICIOS
+# ============================================================
+
+@router.get("/mis-servicios/actual", response_model=Optional[ServicioClienteResponse])
+async def obtener_servicio_actual(
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene el servicio actual (activo) del cliente.
+    Retorna el servicio en estado 'creado' o 'en_proceso' más reciente.
+    """
+    from app.models.servicio import EstadoServicio
+    from app.models.solicitud_servicio import SolicitudServicio
+    
+    # Buscar servicios activos del cliente a través de sus diagnósticos
+    result = await db.execute(
+        select(servicio_crud.model)
+        .join(SolicitudServicio, SolicitudServicio.id == servicio_crud.model.id_solicitud_servicio)
+        .join(diagnostico_crud.model, diagnostico_crud.model.id == SolicitudServicio.id_diagnostico)
+        .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
+        .where(
+            solicitud_diagnostico_crud.model.id_persona == current_persona.id,
+            servicio_crud.model.estado.in_([EstadoServicio.creado, EstadoServicio.en_proceso])
+        )
+        .order_by(servicio_crud.model.fecha.desc())
+    )
+    
+    servicio = result.scalars().first()
+    
+    if not servicio:
+        return None
+    
+    # Obtener información del taller
+    taller = await taller_crud.get(db, servicio.id_taller)
+    taller_ubicacion = None
+    if taller.ubicacion:
+        point = to_shape(taller.ubicacion)
+        taller_ubicacion = f"{point.y},{point.x}"
+    
+    taller_info = TallerInfoResponse(
+        id=taller.id,
+        nombre=taller.nombre,
+        telefono=taller.telefono,
+        email=taller.email,
+        direccion=taller.direccion,
+        ubicacion=taller_ubicacion,
+        puntos=float(taller.puntos)
+    )
+    
+    # Obtener técnicos asignados
+    tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
+    tecnicos_response = []
+    for asignacion in tecnicos_asignados:
+        empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
+        if empleado:
+            tecnicos_response.append(TecnicoAsignadoResponse(
+                id_empleado=empleado.id,
+                nombre_completo=empleado.usuario.nombre
+            ))
+    
+    # Obtener vehículos asignados
+    vehiculos_asignados = await servicio_vehiculo_crud.get_by_servicio(db, servicio.id)
+    vehiculos_response = []
+    for asignacion in vehiculos_asignados:
+        result_v = await db.execute(
+            select(VehiculoTaller).where(VehiculoTaller.id == asignacion.id_vehiculo_taller)
+        )
+        vehiculo = result_v.scalar_one_or_none()
+        if vehiculo:
+            vehiculos_response.append(VehiculoAsignadoResponse(
+                id_vehiculo_taller=vehiculo.id,
+                matricula=vehiculo.matricula,
+                marca=vehiculo.marca,
+                modelo=vehiculo.modelo
+            ))
+    
+    # Obtener ubicación del cliente (de la solicitud original)
+    solicitud = await solicitud_servicio_crud.get(db, servicio.id_solicitud_servicio)
+    ubicacion_cliente = None
+    if solicitud and solicitud.ubicacion:
+        point = to_shape(solicitud.ubicacion)
+        ubicacion_cliente = f"{point.y},{point.x}"
+    
+    # Obtener información del diagnóstico
+    diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
+    diagnostico_response = None
+    if diagnostico:
+        diagnostico_response = DiagnosticoDetalleResponse(
+            id=diagnostico.id,
+            descripcion=diagnostico.descripcion,
+            nivel_confianza=diagnostico.nivel_confianza,
+            fecha=diagnostico.fecha
+        )
+    
+    return ServicioClienteResponse(
+        id=servicio.id,
+        fecha=servicio.fecha,
+        estado=servicio.estado.value,
+        taller=taller_info,
+        tecnicos_asignados=tecnicos_response,
+        vehiculos_asignados=vehiculos_response,
+        ubicacion_cliente=ubicacion_cliente,
+        diagnostico=diagnostico_response
+    )
+
+
+@router.get("/mis-servicios/historial", response_model=List[ServicioClienteListResponse])
+async def obtener_historial_servicios(
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene el historial de servicios completados o cancelados del cliente.
+    """
+    from app.models.servicio import EstadoServicio
+    from app.models.solicitud_servicio import SolicitudServicio
+    
+    # Buscar servicios completados/cancelados del cliente
+    result = await db.execute(
+        select(servicio_crud.model)
+        .join(SolicitudServicio, SolicitudServicio.id == servicio_crud.model.id_solicitud_servicio)
+        .join(diagnostico_crud.model, diagnostico_crud.model.id == SolicitudServicio.id_diagnostico)
+        .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
+        .where(
+            solicitud_diagnostico_crud.model.id_persona == current_persona.id,
+            servicio_crud.model.estado.in_([EstadoServicio.completado, EstadoServicio.cancelado])
+        )
+        .order_by(servicio_crud.model.fecha.desc())
+    )
+    
+    servicios = result.scalars().all()
+    
+    # Construir respuesta
+    resultado = []
+    for servicio in servicios:
+        # Obtener taller
+        taller = await taller_crud.get(db, servicio.id_taller)
+        
+        # Obtener diagnóstico
+        solicitud = await solicitud_servicio_crud.get(db, servicio.id_solicitud_servicio)
+        diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
+        
+        resultado.append(ServicioClienteListResponse(
+            id=servicio.id,
+            fecha=servicio.fecha,
+            estado=servicio.estado.value,
+            taller_nombre=taller.nombre,
+            diagnostico_descripcion=diagnostico.descripcion if diagnostico else None
+        ))
+    
+    return resultado
+
+
+@router.get("/mis-servicios/{servicio_id}/detalle", response_model=ServicioClienteResponse)
+async def obtener_detalle_servicio_cliente(
+    servicio_id: int,
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene el detalle completo de un servicio específico del cliente.
+    """
+    from app.models.solicitud_servicio import SolicitudServicio
+    
+    # Obtener servicio y verificar que pertenece al cliente
+    servicio = await servicio_crud.get(db, servicio_id)
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Verificar que el servicio pertenece al cliente
+    solicitud = await solicitud_servicio_crud.get(db, servicio.id_solicitud_servicio)
+    diagnostico = await diagnostico_crud.get(db, solicitud.id_diagnostico)
+    solicitud_diag = await solicitud_diagnostico_crud.get(db, diagnostico.id_solicitud_diagnostico)
+    
+    if solicitud_diag.id_persona != current_persona.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    
+    # Obtener información del taller
+    taller = await taller_crud.get(db, servicio.id_taller)
+    taller_ubicacion = None
+    if taller.ubicacion:
+        point = to_shape(taller.ubicacion)
+        taller_ubicacion = f"{point.y},{point.x}"
+    
+    taller_info = TallerInfoResponse(
+        id=taller.id,
+        nombre=taller.nombre,
+        telefono=taller.telefono,
+        email=taller.email,
+        direccion=taller.direccion,
+        ubicacion=taller_ubicacion,
+        puntos=float(taller.puntos)
+    )
+    
+    # Obtener técnicos asignados
+    tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
+    tecnicos_response = []
+    for asignacion in tecnicos_asignados:
+        empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
+        if empleado:
+            tecnicos_response.append(TecnicoAsignadoResponse(
+                id_empleado=empleado.id,
+                nombre_completo=empleado.usuario.nombre
+            ))
+    
+    # Obtener vehículos asignados
+    vehiculos_asignados = await servicio_vehiculo_crud.get_by_servicio(db, servicio.id)
+    vehiculos_response = []
+    for asignacion in vehiculos_asignados:
+        result_v = await db.execute(
+            select(VehiculoTaller).where(VehiculoTaller.id == asignacion.id_vehiculo_taller)
+        )
+        vehiculo = result_v.scalar_one_or_none()
+        if vehiculo:
+            vehiculos_response.append(VehiculoAsignadoResponse(
+                id_vehiculo_taller=vehiculo.id,
+                matricula=vehiculo.matricula,
+                marca=vehiculo.marca,
+                modelo=vehiculo.modelo
+            ))
+    
+    # Obtener ubicación del cliente
+    ubicacion_cliente = None
+    if solicitud.ubicacion:
+        point = to_shape(solicitud.ubicacion)
+        ubicacion_cliente = f"{point.y},{point.x}"
+    
+    # Obtener información del diagnóstico
+    diagnostico_response = None
+    if diagnostico:
+        diagnostico_response = DiagnosticoDetalleResponse(
+            id=diagnostico.id,
+            descripcion=diagnostico.descripcion,
+            nivel_confianza=diagnostico.nivel_confianza,
+            fecha=diagnostico.fecha
+        )
+    
+    return ServicioClienteResponse(
+        id=servicio.id,
+        fecha=servicio.fecha,
+        estado=servicio.estado.value,
+        taller=taller_info,
+        tecnicos_asignados=tecnicos_response,
+        vehiculos_asignados=vehiculos_response,
+        ubicacion_cliente=ubicacion_cliente,
+        diagnostico=diagnostico_response
+    )
