@@ -7,6 +7,7 @@ from .endpoints import (
     vehiculos,
     solicitudes,
     diagnosticos,
+    servicios,
     talleres,
     empleados,
     tecnicos,
@@ -25,6 +26,7 @@ api_router.include_router(perfiles.router, prefix="/perfil", tags=["Perfil"])
 api_router.include_router(vehiculos.router, prefix="/vehiculos", tags=["Vehículos"])
 api_router.include_router(solicitudes.router, prefix="/solicitudes/afiliacion", tags=["Afiliación de Talleres"])
 api_router.include_router(diagnosticos.router, tags=["Diagnósticos"])
+api_router.include_router(servicios.router, tags=["Servicios"])
 api_router.include_router(talleres.router, prefix="/talleres", tags=["Talleres"])
 api_router.include_router(empleados.router, tags=["Empleados"])
 api_router.include_router(tecnicos.router, tags=["Técnicos"])
