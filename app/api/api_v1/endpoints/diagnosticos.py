@@ -186,6 +186,81 @@ async def sugerir_incidente(solicitud_id: int, concepto: str = Form(...), curren
     return {"message": "Sugerencia registrada"}
 
 
+@router.post("/{solicitud_id}/asociar-tipo", status_code=201)
+async def asociar_tipo_incidente(
+    solicitud_id: int,
+    id_tipo_incidente: int = Form(...),
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """Asocia un tipo de incidente existente al diagnóstico"""
+    solicitud = await solicitud_crud.get(db, solicitud_id)
+    if not solicitud:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if solicitud.id_persona != current_persona.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    if not solicitud.diagnostico:
+        raise HTTPException(status_code=400, detail="El diagnóstico aún no está disponible")
+
+    # Verificar que el tipo existe
+    tipo = await tipo_incidente_crud.get(db, id_tipo_incidente)
+    if not tipo:
+        raise HTTPException(status_code=404, detail="Tipo de incidente no encontrado")
+
+    # Verificar que no esté ya asociado
+    existing = await incidente_crud.get_by_diagnostico_and_tipo(db, solicitud.diagnostico.id, id_tipo_incidente)
+    if existing:
+        raise HTTPException(status_code=400, detail="Este tipo de incidente ya está asociado")
+
+    # Crear incidente asociado por conductor
+    await incidente_crud.create(db, {
+        "id_diagnostico": solicitud.diagnostico.id,
+        "id_tipo_incidente": id_tipo_incidente,
+        "sugerido_por": "conductor",
+        "nivel_confianza": Decimal("1.0")
+    })
+    await db.commit()
+    return {"message": "Tipo de incidente asociado correctamente"}
+
+
+@router.delete("/{solicitud_id}/incidentes/{incidente_id}", status_code=204)
+async def descartar_incidente(
+    solicitud_id: int,
+    incidente_id: int,
+    current_persona: Persona = Depends(get_current_persona),
+    db: AsyncSession = Depends(get_db)
+):
+    """Descarta/elimina un incidente del diagnóstico"""
+    solicitud = await solicitud_crud.get(db, solicitud_id)
+    if not solicitud:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+    if solicitud.id_persona != current_persona.id:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    if not solicitud.diagnostico:
+        raise HTTPException(status_code=400, detail="El diagnóstico no está disponible")
+
+    # Verificar que el incidente pertenece a este diagnóstico
+    incidente = await incidente_crud.get(db, incidente_id)
+    if not incidente or incidente.id_diagnostico != solicitud.diagnostico.id:
+        raise HTTPException(status_code=404, detail="Incidente no encontrado en este diagnóstico")
+
+    # Eliminar el incidente
+    await incidente_crud.delete(db, incidente_id)
+    await db.commit()
+    return None
+
+
+@router.get("/tipos-incidentes", response_model=list[dict])
+async def listar_tipos_incidentes_publico(
+    db: AsyncSession = Depends(get_db)
+):
+    """Lista todos los tipos de incidentes disponibles (endpoint público)"""
+    tipos = await tipo_incidente_crud.get_all(db)
+    return [{"id": t.id, "concepto": t.concepto, "prioridad": t.prioridad} for t in tipos]
+
+
 @router.post("/{solicitud_id}/reintentar", status_code=200)
 async def reintentar(solicitud_id: int, current_persona: Persona = Depends(get_current_persona), db: AsyncSession = Depends(get_db)):
     solicitud = await solicitud_crud.get(db, solicitud_id)
