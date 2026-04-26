@@ -25,6 +25,9 @@ from app.schemas.servicio import (
     TecnicoUbicacionResponse,
     EstadoHistorialClienteResponse
 )
+from app.schemas.valoracion import ValoracionCreate, ValoracionResponse
+from app.crud import crud_valoracion
+from app.services import valoracion_service
 from geoalchemy2.shape import to_shape
 from datetime import datetime
 
@@ -317,3 +320,220 @@ async def obtener_ruta_tecnico(
             },
             "fallback": True
         }
+
+
+
+# ============================================================
+# ENDPOINTS PARA VALORACIONES
+# ============================================================
+
+@router.post("/servicio/{servicio_id}/valorar", response_model=ValoracionResponse, status_code=status.HTTP_201_CREATED)
+async def valorar_servicio(
+    servicio_id: int,
+    valoracion_data: ValoracionCreate,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Permite al cliente valorar un servicio finalizado.
+    Solo se puede valorar servicios finalizados y una sola vez por servicio.
+    """
+    # Verificar que el servicio existe y pertenece al cliente
+    result = await db.execute(
+        select(Servicio).join(
+            SolicitudServicio, Servicio.id_solicitud_servicio == SolicitudServicio.id
+        ).join(
+            Diagnostico, SolicitudServicio.id_diagnostico == Diagnostico.id
+        ).join(
+            SolicitudDiagnostico, Diagnostico.id_solicitud_diagnostico == SolicitudDiagnostico.id
+        ).where(
+            and_(
+                Servicio.id == servicio_id,
+                SolicitudDiagnostico.id_persona == current_usuario.id_persona
+            )
+        )
+    )
+    
+    servicio = result.scalar_one_or_none()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Verificar que el servicio esté finalizado
+    if servicio.estado != EstadoServicio.finalizado:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden valorar servicios finalizados"
+        )
+    
+    # Verificar que no exista ya una valoración
+    valoracion_existente = await crud_valoracion.valoracion.get_by_servicio(db, servicio_id)
+    if valoracion_existente:
+        raise HTTPException(
+            status_code=400,
+            detail="Este servicio ya ha sido valorado. Puedes actualizar tu valoración."
+        )
+    
+    # Crear la valoración
+    try:
+        valoracion = await valoracion_service.crear_valoracion_y_actualizar_taller(
+            db=db,
+            id_servicio=servicio_id,
+            puntos=valoracion_data.puntos,
+            comentario=valoracion_data.comentario
+        )
+        
+        await db.commit()
+        await db.refresh(valoracion)
+        
+        return valoracion
+    
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al crear valoración: {str(e)}")
+
+
+@router.get("/servicio/{servicio_id}/valoracion", response_model=Optional[ValoracionResponse])
+async def obtener_valoracion_servicio(
+    servicio_id: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene la valoración de un servicio si existe.
+    """
+    # Verificar que el servicio pertenece al cliente
+    result = await db.execute(
+        select(Servicio).join(
+            SolicitudServicio, Servicio.id_solicitud_servicio == SolicitudServicio.id
+        ).join(
+            Diagnostico, SolicitudServicio.id_diagnostico == Diagnostico.id
+        ).join(
+            SolicitudDiagnostico, Diagnostico.id_solicitud_diagnostico == SolicitudDiagnostico.id
+        ).where(
+            and_(
+                Servicio.id == servicio_id,
+                SolicitudDiagnostico.id_persona == current_usuario.id_persona
+            )
+        )
+    )
+    
+    servicio = result.scalar_one_or_none()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Obtener valoración
+    valoracion = await crud_valoracion.valoracion.get_by_servicio(db, servicio_id)
+    return valoracion
+
+
+@router.put("/servicio/{servicio_id}/valoracion", response_model=ValoracionResponse)
+async def actualizar_valoracion_servicio(
+    servicio_id: int,
+    valoracion_data: ValoracionCreate,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Actualiza la valoración de un servicio.
+    """
+    # Verificar que el servicio pertenece al cliente
+    result = await db.execute(
+        select(Servicio).join(
+            SolicitudServicio, Servicio.id_solicitud_servicio == SolicitudServicio.id
+        ).join(
+            Diagnostico, SolicitudServicio.id_diagnostico == Diagnostico.id
+        ).join(
+            SolicitudDiagnostico, Diagnostico.id_solicitud_diagnostico == SolicitudDiagnostico.id
+        ).where(
+            and_(
+                Servicio.id == servicio_id,
+                SolicitudDiagnostico.id_persona == current_usuario.id_persona
+            )
+        )
+    )
+    
+    servicio = result.scalar_one_or_none()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    # Obtener valoración existente
+    valoracion = await crud_valoracion.valoracion.get_by_servicio(db, servicio_id)
+    if not valoracion:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una valoración para este servicio. Usa POST para crear una."
+        )
+    
+    # Actualizar valoración
+    try:
+        valoracion = await valoracion_service.actualizar_valoracion_y_taller(
+            db=db,
+            valoracion=valoracion,
+            nuevos_puntos=valoracion_data.puntos,
+            nuevo_comentario=valoracion_data.comentario
+        )
+        
+        await db.commit()
+        await db.refresh(valoracion)
+        
+        return valoracion
+    
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al actualizar valoración: {str(e)}")
+
+
+
+@router.get("/taller/{taller_id}/estadisticas")
+async def obtener_estadisticas_taller(
+    taller_id: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene estadísticas de valoraciones de un taller.
+    Útil para mostrar al cliente antes de solicitar un servicio.
+    """
+    from sqlalchemy import func
+    
+    # Obtener el taller
+    result_taller = await db.execute(
+        select(Taller).where(Taller.id == taller_id)
+    )
+    taller = result_taller.scalar_one_or_none()
+    
+    if not taller:
+        raise HTTPException(status_code=404, detail="Taller no encontrado")
+    
+    # Contar total de valoraciones
+    result_count = await db.execute(
+        select(func.count(Valoracion.id)).select_from(Valoracion).join(
+            Servicio, Valoracion.id_servicio == Servicio.id
+        ).where(
+            Servicio.id_taller == taller_id
+        )
+    )
+    total_valoraciones = result_count.scalar()
+    
+    # Obtener distribución de puntos (cuántas valoraciones de 1, 2, 3, 4, 5 estrellas)
+    distribucion = {}
+    for puntos in range(1, 6):
+        result_dist = await db.execute(
+            select(func.count(Valoracion.id)).select_from(Valoracion).join(
+                Servicio, Valoracion.id_servicio == Servicio.id
+            ).where(
+                and_(
+                    Servicio.id_taller == taller_id,
+                    Valoracion.puntos == puntos
+                )
+            )
+        )
+        distribucion[f"{puntos}_estrellas"] = result_dist.scalar()
+    
+    return {
+        "taller_id": taller_id,
+        "nombre": taller.nombre,
+        "puntos_promedio": float(taller.puntos),
+        "total_valoraciones": total_valoraciones,
+        "distribucion": distribucion
+    }

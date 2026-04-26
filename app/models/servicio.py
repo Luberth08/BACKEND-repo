@@ -37,3 +37,4 @@ class Servicio(Base):
     historial_estados = relationship("HistorialEstadoServicio", back_populates="servicio", cascade="all, delete-orphan")
     metrica = relationship("Metrica", back_populates="servicio", uselist=False, cascade="all, delete-orphan")
     ubicaciones_tecnicos = relationship("EmpleadoUbicacion", back_populates="servicio")
+    valoracion = relationship("Valoracion", back_populates="servicio", uselist=False, cascade="all, delete-orphan")
