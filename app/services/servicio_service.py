@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
-from geoalchemy2.shape import to_shape
 
 from app.crud import (
     servicio as servicio_crud,
@@ -178,7 +177,7 @@ async def aceptar_solicitud_servicio(
     servicio_data = {
         'id_taller': id_taller,
         'id_solicitud_servicio': id_solicitud,
-        'estado': EstadoServicio.creado
+        'estado': EstadoServicio.tecnico_asignado  # Usar el nuevo valor del enum
     }
     
     servicio = await servicio_crud.create(db, servicio_data)
@@ -326,7 +325,7 @@ async def completar_servicio(
             vehiculo.estado = EstadoVehiculoTaller.disponible
     
     # Actualizar estado del servicio
-    await servicio_crud.update_estado(db, id_servicio, EstadoServicio.completado)
+    await servicio_crud.update_estado(db, id_servicio, EstadoServicio.finalizado)
     
     await db.commit()
     await db.refresh(servicio)

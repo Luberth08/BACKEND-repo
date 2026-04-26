@@ -28,14 +28,17 @@ class CRUDServicio(CRUDBase[Servicio]):
         db: AsyncSession,
         id_taller: int
     ) -> List[Servicio]:
-        """Obtiene servicios en proceso de un taller"""
+        """Obtiene servicios en proceso de un taller (todos los estados activos)"""
         result = await db.execute(
             select(Servicio).where(
                 and_(
                     Servicio.id_taller == id_taller,
                     or_(
                         Servicio.estado == EstadoServicio.creado,
-                        Servicio.estado == EstadoServicio.en_proceso
+                        Servicio.estado == EstadoServicio.tecnico_asignado,
+                        Servicio.estado == EstadoServicio.en_camino,
+                        Servicio.estado == EstadoServicio.en_lugar,
+                        Servicio.estado == EstadoServicio.en_atencion
                     )
                 )
             ).order_by(Servicio.fecha.desc())
@@ -53,7 +56,7 @@ class CRUDServicio(CRUDBase[Servicio]):
                 and_(
                     Servicio.id_taller == id_taller,
                     or_(
-                        Servicio.estado == EstadoServicio.completado,
+                        Servicio.estado == EstadoServicio.finalizado,
                         Servicio.estado == EstadoServicio.cancelado
                     )
                 )
