@@ -21,16 +21,15 @@ async def get_my_profile(
     
     usuario = await crud_usuario.get_by_id_persona(db, current_persona.id)
     
-    # Obtener el rol principal del usuario (si tiene)
-    rol_nombre = None
+    # Obtener TODOS los roles del usuario
+    roles = []
     if usuario:
         result = await db.execute(
             select(Rol.nombre)
             .join(RolUsuario, RolUsuario.id_rol == Rol.id)
             .where(RolUsuario.id_usuario == usuario.id)
-            .limit(1)
         )
-        rol_nombre = result.scalar_one_or_none()
+        roles = [row[0] for row in result.all()]
     
     return PerfilResponse(
         email=current_persona.email,
@@ -43,7 +42,7 @@ async def get_my_profile(
         complemento=current_persona.complemento,
         telefono=current_persona.telefono,
         direccion=current_persona.direccion,
-        rol=rol_nombre,
+        roles=roles,  # Enviar lista de roles
     )
 
 @router.put("/me", response_model=PerfilResponse)
@@ -70,16 +69,15 @@ async def update_my_profile(
     persona = result["persona"]
     usuario = result["usuario"]
     
-    # Obtener el rol principal del usuario
-    rol_nombre = None
+    # Obtener TODOS los roles del usuario
+    roles = []
     if usuario:
         result_rol = await db.execute(
             select(Rol.nombre)
             .join(RolUsuario, RolUsuario.id_rol == Rol.id)
             .where(RolUsuario.id_usuario == usuario.id)
-            .limit(1)
         )
-        rol_nombre = result_rol.scalar_one_or_none()
+        roles = [row[0] for row in result_rol.all()]
     
     return PerfilResponse(
         email=persona.email,
@@ -92,7 +90,7 @@ async def update_my_profile(
         complemento=persona.complemento,
         telefono=persona.telefono,
         direccion=persona.direccion,
-        rol=rol_nombre,
+        roles=roles,
     )
 
 @router.post("/create-usuario", response_model=PerfilResponse, status_code=status.HTTP_201_CREATED)
@@ -115,16 +113,15 @@ async def create_usuario(
     persona = result["persona"]
     usuario = result["usuario"]
     
-    # Obtener el rol principal del usuario
-    rol_nombre = None
+    # Obtener TODOS los roles del usuario
+    roles = []
     if usuario:
         result_rol = await db.execute(
             select(Rol.nombre)
             .join(RolUsuario, RolUsuario.id_rol == Rol.id)
             .where(RolUsuario.id_usuario == usuario.id)
-            .limit(1)
         )
-        rol_nombre = result_rol.scalar_one_or_none()
+        roles = [row[0] for row in result_rol.all()]
     
     return PerfilResponse(
         email=persona.email,
@@ -137,7 +134,7 @@ async def create_usuario(
         complemento=persona.complemento,
         telefono=persona.telefono,
         direccion=persona.direccion,
-        rol=rol_nombre,
+        roles=roles,
     )
 
 @router.post("/upload-photo")
