@@ -199,3 +199,62 @@ class ServicioClienteListResponse(BaseModel):
     
     class Config:
         orm_mode = True
+
+
+# ============================================================
+# SCHEMAS PARA UBICACIÓN DE TÉCNICOS
+# ============================================================
+
+class TecnicoUbicacionResponse(BaseModel):
+    """Ubicación actual de un técnico"""
+    id_empleado: int
+    nombre_completo: str
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
+    timestamp: Optional[datetime] = None
+    tiene_ubicacion: bool = False
+    
+    class Config:
+        orm_mode = True
+
+
+class EstadoHistorialClienteResponse(BaseModel):
+    """Historial de estados para el cliente"""
+    estado: str
+    estado_descripcion: str
+    tiempo: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class ServicioSeguimientoClienteResponse(BaseModel):
+    """Seguimiento completo del servicio para el cliente"""
+    id: int
+    fecha: datetime
+    estado: str
+    estado_descripcion: str
+    
+    # Información del taller
+    taller: TallerInfoResponse
+    
+    # Técnicos con ubicación
+    tecnicos: List[TecnicoUbicacionResponse] = []
+    
+    # Historial de estados
+    historial_estados: List[EstadoHistorialClienteResponse] = []
+    
+    # Ubicación del cliente
+    ubicacion_cliente: Optional[str] = None  # "lat,lon"
+    
+    # Diagnóstico
+    diagnostico_descripcion: Optional[str] = None
+    
+    class Config:
+        orm_mode = True
+
+
+class ActualizarUbicacionRequest(BaseModel):
+    """Request para actualizar ubicación del técnico"""
+    latitud: float
+    longitud: float

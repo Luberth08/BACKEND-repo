@@ -21,6 +21,7 @@ class Empleado(Base):
 
     usuario = relationship("Usuario", backref="empleados")
     taller = relationship("Taller", backref="empleados")
+    ubicaciones = relationship("EmpleadoUbicacion", back_populates="empleado", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint('fecha_salida IS NULL OR fecha_salida >= fecha_ingreso', name='chk_fechas_empleado'),
