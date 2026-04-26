@@ -99,7 +99,7 @@ async def obtener_servicio_actual(
         nombre=taller.nombre,
         telefono=taller.telefono,
         email=taller.email,
-        direccion=taller.direccion,
+        direccion=None,  # El modelo Taller no tiene dirección
         ubicacion=taller_ubicacion,
         puntos=float(taller.puntos) if taller.puntos else 0.0
     )
@@ -112,14 +112,23 @@ async def obtener_servicio_actual(
     )
     asignaciones = result_tecnicos.scalars().all()
     
+    print(f"🔍 DEBUG - Servicio {servicio.id}: {len(asignaciones)} técnicos asignados")
+    
     tecnicos_response = []
     for asignacion in asignaciones:
         empleado = await empleado_crud.get_with_usuario(db, asignacion.id_empleado)
         if empleado:
+            print(f"👤 DEBUG - Técnico {empleado.id}: {empleado.usuario.nombre}")
+            
             # Obtener ubicación activa del técnico
             ubicacion = await crud_empleado_ubicacion.empleado_ubicacion.get_ubicacion_activa(
                 db, empleado.id
             )
+            
+            if ubicacion:
+                print(f"📍 DEBUG - Ubicación encontrada: lat={ubicacion.latitud}, lon={ubicacion.longitud}, timestamp={ubicacion.timestamp}")
+            else:
+                print(f"⚠️ DEBUG - No hay ubicación activa para técnico {empleado.id}")
             
             tecnicos_response.append(TecnicoUbicacionResponse(
                 id_empleado=empleado.id,
@@ -129,6 +138,8 @@ async def obtener_servicio_actual(
                 timestamp=ubicacion.timestamp if ubicacion else None,
                 tiene_ubicacion=ubicacion is not None
             ))
+    
+    print(f"✅ DEBUG - Total técnicos en respuesta: {len(tecnicos_response)}")
     
     # Obtener historial de estados
     result_historial = await db.execute(
