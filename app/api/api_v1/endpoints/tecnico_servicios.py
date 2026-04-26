@@ -497,10 +497,29 @@ async def actualizar_estado_servicio(
     from app.services import servicio_service
     
     try:
+        # Guardar estado anterior para la notificación
+        estado_anterior = servicio.estado.value
+        
         nuevo_estado_enum = EstadoServicio(nuevo_estado)
         await servicio_service.actualizar_estado_servicio(db, servicio_id, nuevo_estado_enum)
         await db.commit()
         await db.refresh(servicio)
+        
+        # Enviar notificación al cliente sobre el cambio de estado
+        from app.services.notification_service import notification_service
+        try:
+            if nuevo_estado == 'finalizado':
+                # Notificación especial para servicio finalizado
+                await notification_service.notificar_servicio_finalizado(db, servicio)
+            else:
+                # Notificación general de cambio de estado
+                await notification_service.notificar_cambio_estado_servicio(
+                    db, servicio, estado_anterior, nuevo_estado
+                )
+        except Exception as e:
+            # Log error pero no fallar la operación principal
+            import logging
+            logging.getLogger(__name__).error(f"Error enviando notificación: {e}")
         
         return {
             "message": "Estado actualizado exitosamente",

@@ -270,6 +270,15 @@ async def aceptar_solicitud(
             vehiculos_ids=servicio_data.vehiculos_ids
         )
         
+        # Enviar notificación al cliente
+        from app.services.notification_service import notification_service
+        try:
+            await notification_service.notificar_solicitud_aceptada(db, servicio)
+        except Exception as e:
+            # Log error pero no fallar la operación principal
+            import logging
+            logging.getLogger(__name__).error(f"Error enviando notificación: {e}")
+        
         # Obtener técnicos asignados
         tecnicos_asignados = await servicio_tecnico_crud.get_by_servicio(db, servicio.id)
         tecnicos_response = []
