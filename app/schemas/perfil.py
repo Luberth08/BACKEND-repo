@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 
 class UpdatePerfilRequest(BaseModel):
     username: Optional[str] = None
@@ -23,7 +23,7 @@ class PerfilResponse(BaseModel):
     complemento: Optional[str] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
-    rol: Optional[str] = None  # Rol principal del usuario (tecnico, cliente, admin, etc.)
+    roles: List[str] = []  # Lista de roles del usuario
 
 class CreateUsuarioRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
