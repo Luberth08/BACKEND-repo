@@ -733,3 +733,51 @@ async def obtener_metricas_servicio(
         tiempo_total=format_timedelta(tiempo_total) if tiempo_total else None,
         tiempo_total_segundos=tiempo_total_segundos
     )
+
+
+# ============================================================
+# ENDPOINT PARA VALORACIONES
+# ============================================================
+
+@router.get("/servicios/{servicio_id}/valoracion")
+async def obtener_valoracion_servicio_taller(
+    servicio_id: int,
+    id_taller: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene la valoración de un servicio del taller.
+    Permite al taller ver las valoraciones que reciben sus servicios.
+    """
+    from app.crud import crud_valoracion
+    from sqlalchemy import select
+    from app.models.servicio import Servicio
+    
+    # Verificar que el servicio pertenece al taller
+    result = await db.execute(
+        select(Servicio).where(
+            Servicio.id == servicio_id,
+            Servicio.id_taller == id_taller
+        )
+    )
+    servicio = result.scalar_one_or_none()
+    
+    if not servicio:
+        raise HTTPException(
+            status_code=404,
+            detail="Servicio no encontrado o no pertenece a este taller"
+        )
+    
+    # Obtener valoración
+    valoracion = await crud_valoracion.valoracion.get_by_servicio(db, servicio_id)
+    
+    if not valoracion:
+        return None
+    
+    return {
+        "id": valoracion.id,
+        "puntos": valoracion.puntos,
+        "comentario": valoracion.comentario,
+        "id_servicio": valoracion.id_servicio
+    }
