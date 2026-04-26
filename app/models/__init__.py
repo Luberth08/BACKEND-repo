@@ -28,3 +28,4 @@ from app.models.servicio_vehiculo import ServicioVehiculo
 from app.models.metrica import Metrica
 from app.models.historial_estado_servicio import HistorialEstadoServicio
 from app.models.empleado_ubicacion import EmpleadoUbicacion
+from app.models.valoracion import Valoracion
