@@ -525,6 +525,8 @@ async def actualizar_ubicacion_tecnico(
     """
     Actualiza la ubicación GPS del técnico para seguimiento en tiempo real
     """
+    from app.crud import crud_empleado_ubicacion
+    
     # Obtener el servicio
     servicio = await db.get(Servicio, servicio_id)
     if not servicio:
@@ -552,12 +554,21 @@ async def actualizar_ubicacion_tecnico(
             detail="Solo se puede actualizar ubicación en servicios activos"
         )
     
-    # TODO: Aquí se podría guardar la ubicación en una tabla de historial
-    # Por ahora solo retornamos éxito
+    # Guardar la ubicación en la tabla de historial
+    ubicacion = await crud_empleado_ubicacion.empleado_ubicacion.crear_ubicacion(
+        db=db,
+        id_empleado=empleado.id,
+        latitud=request.latitud,
+        longitud=request.longitud,
+        id_servicio=servicio_id
+    )
+    
+    await db.commit()
     
     return {
         "message": "Ubicación actualizada exitosamente",
         "servicio_id": servicio_id,
-        "latitud": request.latitud,
-        "longitud": request.longitud
+        "latitud": float(ubicacion.latitud),
+        "longitud": float(ubicacion.longitud),
+        "timestamp": ubicacion.timestamp.isoformat()
     }
