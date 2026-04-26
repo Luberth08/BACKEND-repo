@@ -493,9 +493,12 @@ async def actualizar_estado_servicio(
             detail=f"Transición no válida de '{estado_actual}' a '{nuevo_estado}'"
         )
     
-    # Actualizar estado
+    # Actualizar estado usando la función del servicio que registra historial y métricas
+    from app.services import servicio_service
+    
     try:
-        servicio.estado = EstadoServicio(nuevo_estado)
+        nuevo_estado_enum = EstadoServicio(nuevo_estado)
+        await servicio_service.actualizar_estado_servicio(db, servicio_id, nuevo_estado_enum)
         await db.commit()
         await db.refresh(servicio)
         

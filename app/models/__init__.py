@@ -25,3 +25,5 @@ from app.models.solicitud_servicio import SolicitudServicio
 from app.models.servicio import Servicio
 from app.models.servicio_tecnico import ServicioTecnico
 from app.models.servicio_vehiculo import ServicioVehiculo
+from app.models.metrica import Metrica
+from app.models.historial_estado_servicio import HistorialEstadoServicio
