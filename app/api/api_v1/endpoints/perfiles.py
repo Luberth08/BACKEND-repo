@@ -15,7 +15,23 @@ async def get_my_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Obtiene el perfil completo del usuario autenticado."""
+    from sqlalchemy import select
+    from app.models.rol_usuario import RolUsuario
+    from app.models.rol import Rol
+    
     usuario = await crud_usuario.get_by_id_persona(db, current_persona.id)
+    
+    # Obtener el rol principal del usuario (si tiene)
+    rol_nombre = None
+    if usuario:
+        result = await db.execute(
+            select(Rol.nombre)
+            .join(RolUsuario, RolUsuario.id_rol == Rol.id)
+            .where(RolUsuario.id_usuario == usuario.id)
+            .limit(1)
+        )
+        rol_nombre = result.scalar_one_or_none()
+    
     return PerfilResponse(
         email=current_persona.email,
         username=usuario.nombre if usuario else None,
@@ -27,6 +43,7 @@ async def get_my_profile(
         complemento=current_persona.complemento,
         telefono=current_persona.telefono,
         direccion=current_persona.direccion,
+        rol=rol_nombre,
     )
 
 @router.put("/me", response_model=PerfilResponse)
@@ -36,6 +53,10 @@ async def update_my_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Actualiza el perfil (datos personales, nombre de usuario, foto)."""
+    from sqlalchemy import select
+    from app.models.rol_usuario import RolUsuario
+    from app.models.rol import Rol
+    
     # Datos de persona (excluyendo username y url_img_perfil)
     persona_update = req.dict(exclude={"username", "url_img_perfil"})
     # Llamar al servicio
@@ -48,6 +69,18 @@ async def update_my_profile(
     )
     persona = result["persona"]
     usuario = result["usuario"]
+    
+    # Obtener el rol principal del usuario
+    rol_nombre = None
+    if usuario:
+        result_rol = await db.execute(
+            select(Rol.nombre)
+            .join(RolUsuario, RolUsuario.id_rol == Rol.id)
+            .where(RolUsuario.id_usuario == usuario.id)
+            .limit(1)
+        )
+        rol_nombre = result_rol.scalar_one_or_none()
+    
     return PerfilResponse(
         email=persona.email,
         username=usuario.nombre if usuario else None,
@@ -59,6 +92,7 @@ async def update_my_profile(
         complemento=persona.complemento,
         telefono=persona.telefono,
         direccion=persona.direccion,
+        rol=rol_nombre,
     )
 
 @router.post("/create-usuario", response_model=PerfilResponse, status_code=status.HTTP_201_CREATED)
@@ -68,6 +102,10 @@ async def create_usuario(
     db: AsyncSession = Depends(get_db)
 ):
     """Crea un usuario (username + password) para la persona autenticada."""
+    from sqlalchemy import select
+    from app.models.rol_usuario import RolUsuario
+    from app.models.rol import Rol
+    
     result = await profile_service.create_usuario(
         db=db,
         persona_id=current_persona.id,
@@ -76,6 +114,18 @@ async def create_usuario(
     )
     persona = result["persona"]
     usuario = result["usuario"]
+    
+    # Obtener el rol principal del usuario
+    rol_nombre = None
+    if usuario:
+        result_rol = await db.execute(
+            select(Rol.nombre)
+            .join(RolUsuario, RolUsuario.id_rol == Rol.id)
+            .where(RolUsuario.id_usuario == usuario.id)
+            .limit(1)
+        )
+        rol_nombre = result_rol.scalar_one_or_none()
+    
     return PerfilResponse(
         email=persona.email,
         username=usuario.nombre if usuario else None,
@@ -87,6 +137,7 @@ async def create_usuario(
         complemento=persona.complemento,
         telefono=persona.telefono,
         direccion=persona.direccion,
+        rol=rol_nombre,
     )
 
 @router.post("/upload-photo")
