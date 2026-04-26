@@ -23,6 +23,7 @@ class PerfilResponse(BaseModel):
     complemento: Optional[str] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
+    rol: Optional[str] = None  # Rol principal del usuario (tecnico, cliente, admin, etc.)
 
 class CreateUsuarioRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
