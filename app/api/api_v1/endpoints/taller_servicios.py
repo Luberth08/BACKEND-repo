@@ -346,10 +346,13 @@ async def listar_servicios_en_proceso(
     result = await db.execute(
         select(servicio_crud.model).where(
             servicio_crud.model.id_taller == id_taller,
-            or_(
-                servicio_crud.model.estado == EstadoServicio.creado,
-                servicio_crud.model.estado == EstadoServicio.en_proceso
-            )
+            servicio_crud.model.estado.in_([
+                EstadoServicio.creado,
+                EstadoServicio.tecnico_asignado,
+                EstadoServicio.en_camino,
+                EstadoServicio.en_lugar,
+                EstadoServicio.en_atencion
+            ])
         ).order_by(servicio_crud.model.fecha.desc())
     )
     
@@ -416,7 +419,7 @@ async def listar_servicios_historico(
         select(servicio_crud.model).where(
             servicio_crud.model.id_taller == id_taller,
             or_(
-                servicio_crud.model.estado == EstadoServicio.completado,
+                servicio_crud.model.estado == EstadoServicio.finalizado,
                 servicio_crud.model.estado == EstadoServicio.cancelado
             )
         ).order_by(servicio_crud.model.fecha.desc())

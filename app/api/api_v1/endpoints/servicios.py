@@ -313,7 +313,13 @@ async def obtener_servicio_actual(
         .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
         .where(
             solicitud_diagnostico_crud.model.id_persona == current_persona.id,
-            servicio_crud.model.estado.in_([EstadoServicio.creado, EstadoServicio.en_proceso])
+            servicio_crud.model.estado.in_([
+                EstadoServicio.creado, 
+                EstadoServicio.tecnico_asignado,
+                EstadoServicio.en_camino,
+                EstadoServicio.en_lugar,
+                EstadoServicio.en_atencion
+            ])
         )
         .order_by(servicio_crud.model.fecha.desc())
     )
@@ -430,7 +436,7 @@ async def obtener_historial_servicios(
         .join(solicitud_diagnostico_crud.model, solicitud_diagnostico_crud.model.id == diagnostico_crud.model.id_solicitud_diagnostico)
         .where(
             solicitud_diagnostico_crud.model.id_persona == current_persona.id,
-            servicio_crud.model.estado.in_([EstadoServicio.completado, EstadoServicio.cancelado])
+            servicio_crud.model.estado.in_([EstadoServicio.finalizado, EstadoServicio.cancelado])
         )
         .order_by(servicio_crud.model.fecha.desc())
     )
@@ -604,7 +610,13 @@ async def debug_todos_mis_servicios(
             "solicitud_estado": solicitud.estado.value if solicitud else None,
             "diagnostico_id": solicitud.id_diagnostico if solicitud else None,
             "diagnostico_descripcion": diagnostico.descripcion if diagnostico else None,
-            "es_activo": servicio.estado in [EstadoServicio.creado, EstadoServicio.en_proceso]
+            "es_activo": servicio.estado in [
+                EstadoServicio.creado, 
+                EstadoServicio.tecnico_asignado,
+                EstadoServicio.en_camino,
+                EstadoServicio.en_lugar,
+                EstadoServicio.en_atencion
+            ]
         }
         
         print(f"  - Servicio {servicio.id}: {servicio_info}")

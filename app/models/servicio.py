@@ -7,8 +7,11 @@ from sqlalchemy import Enum as SQLEnum
 
 class EstadoServicio(str, enum.Enum):
     creado = "creado"
-    en_proceso = "en_proceso"
-    completado = "completado"
+    tecnico_asignado = "tecnico_asignado"
+    en_camino = "en_camino"
+    en_lugar = "en_lugar"
+    en_atencion = "en_atencion"
+    finalizado = "finalizado"
     cancelado = "cancelado"
 
 
