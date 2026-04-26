@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.crud import (
     servicio as servicio_crud,
@@ -26,6 +26,15 @@ from app.models.rol_usuario import RolUsuario
 from app.models.rol import Rol
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_datetime_timezone(dt: datetime) -> datetime:
+    """
+    Normaliza un datetime para asegurar que tenga timezone UTC si no tiene ninguno.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 async def obtener_solicitudes_recientes(
@@ -419,20 +428,20 @@ async def calcular_y_guardar_metricas(
     
     # 1. tiempo_respuesta: desde creación de solicitud hasta tecnico_asignado
     if servicio.solicitud_servicio and EstadoServicio.tecnico_asignado in timestamps:
-        tiempo_creacion = servicio.solicitud_servicio.fecha
-        tiempo_aceptacion = timestamps[EstadoServicio.tecnico_asignado]
+        tiempo_creacion = normalize_datetime_timezone(servicio.solicitud_servicio.fecha)
+        tiempo_aceptacion = normalize_datetime_timezone(timestamps[EstadoServicio.tecnico_asignado])
         tiempo_respuesta = tiempo_aceptacion - tiempo_creacion
     
     # 2. tiempo_llegada: desde tecnico_asignado hasta en_lugar
     if EstadoServicio.tecnico_asignado in timestamps and EstadoServicio.en_lugar in timestamps:
-        tiempo_aceptacion = timestamps[EstadoServicio.tecnico_asignado]
-        tiempo_en_lugar = timestamps[EstadoServicio.en_lugar]
+        tiempo_aceptacion = normalize_datetime_timezone(timestamps[EstadoServicio.tecnico_asignado])
+        tiempo_en_lugar = normalize_datetime_timezone(timestamps[EstadoServicio.en_lugar])
         tiempo_llegada = tiempo_en_lugar - tiempo_aceptacion
     
     # 3. tiempo_resolucion: desde en_lugar hasta finalizado
     if EstadoServicio.en_lugar in timestamps and EstadoServicio.finalizado in timestamps:
-        tiempo_en_lugar = timestamps[EstadoServicio.en_lugar]
-        tiempo_finalizado = timestamps[EstadoServicio.finalizado]
+        tiempo_en_lugar = normalize_datetime_timezone(timestamps[EstadoServicio.en_lugar])
+        tiempo_finalizado = normalize_datetime_timezone(timestamps[EstadoServicio.finalizado])
         tiempo_resolucion = tiempo_finalizado - tiempo_en_lugar
     
     # Verificar si ya existe una métrica para este servicio
