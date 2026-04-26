@@ -46,7 +46,7 @@ class CRUDEmpleado(CRUDBase[Empleado]):
             select(Empleado).where(
                 Empleado.id_usuario == id_usuario,
                 Empleado.id_taller == id_taller,
-                Empleado.estado.in_([EstadoEmpleado.activo, EstadoEmpleado.disponible])
+                Empleado.estado.in_([EstadoEmpleado.activo, EstadoEmpleado.disponible, EstadoEmpleado.en_servicio])
             )
         )
         return result.scalar_one_or_none()
