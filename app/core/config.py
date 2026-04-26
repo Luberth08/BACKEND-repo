@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     WHISPER_MODEL_SIZE: str = "base"
     USE_REAL_AI: bool = True
 
+    # Firebase Cloud Messaging
+    FCM_SERVER_KEY: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 @lru_cache

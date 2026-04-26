@@ -18,7 +18,8 @@ from .endpoints import (
     admin_configuracion,
     taller_servicios,
     tecnico_servicios,
-    cliente_servicios
+    cliente_servicios,
+    notifications
 )
 
 api_router = APIRouter()
@@ -41,3 +42,4 @@ api_router.include_router(admin_configuracion.router, prefix="/admin/configuraci
 api_router.include_router(taller_servicios.router, tags=["Taller - Gestión de Servicios"])
 api_router.include_router(tecnico_servicios.router, tags=["Técnico - Servicios Móvil"])
 api_router.include_router(cliente_servicios.router, tags=["Cliente - Seguimiento de Servicios"])
+api_router.include_router(notifications.router, tags=["Notificaciones Push"])
