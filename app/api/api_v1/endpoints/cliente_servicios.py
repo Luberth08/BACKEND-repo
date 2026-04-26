@@ -67,7 +67,7 @@ async def obtener_servicio_actual(
             SolicitudDiagnostico, Diagnostico.id_solicitud_diagnostico == SolicitudDiagnostico.id
         ).where(
             and_(
-                SolicitudDiagnostico.id_usuario == current_usuario.id,
+                SolicitudDiagnostico.id_persona == current_usuario.id_persona,
                 Servicio.estado.in_([
                     EstadoServicio.creado,
                     EstadoServicio.tecnico_asignado,
@@ -200,7 +200,7 @@ async def obtener_ruta_tecnico(
         ).where(
             and_(
                 Servicio.id == servicio_id,
-                SolicitudDiagnostico.id_usuario == current_usuario.id
+                SolicitudDiagnostico.id_persona == current_usuario.id_persona
             )
         ).options(
             selectinload(Servicio.solicitud_servicio).selectinload(SolicitudServicio.diagnostico)
