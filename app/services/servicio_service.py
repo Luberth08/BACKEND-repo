@@ -183,6 +183,9 @@ async def aceptar_solicitud_servicio(
     servicio = await servicio_crud.create(db, servicio_data)
     await db.flush()
     
+    # Registrar el estado inicial en el historial
+    await registrar_cambio_estado(db, servicio.id, EstadoServicio.tecnico_asignado)
+    
     # Asignar técnicos
     for tecnico_id in tecnicos_ids:
         # Verificar que el técnico existe y está disponible
@@ -324,10 +327,166 @@ async def completar_servicio(
         if vehiculo:
             vehiculo.estado = EstadoVehiculoTaller.disponible
     
-    # Actualizar estado del servicio
-    await servicio_crud.update_estado(db, id_servicio, EstadoServicio.finalizado)
+    # Actualizar estado del servicio y calcular métricas
+    await actualizar_estado_servicio(db, id_servicio, EstadoServicio.finalizado)
     
     await db.commit()
     await db.refresh(servicio)
+    
+    return servicio
+
+
+# ============================================================================
+# FUNCIONES PARA HISTORIAL DE ESTADOS Y MÉTRICAS
+# ============================================================================
+
+async def registrar_cambio_estado(
+    db: AsyncSession,
+    id_servicio: int,
+    nuevo_estado: EstadoServicio
+) -> None:
+    """
+    Registra un cambio de estado en el historial.
+    Esta función debe llamarse CADA VEZ que cambie el estado de un servicio.
+    """
+    from app.models.historial_estado_servicio import HistorialEstadoServicio
+    
+    # Crear registro en historial
+    historial = HistorialEstadoServicio(
+        id_servicio=id_servicio,
+        estado=nuevo_estado,
+        # tiempo se establece automáticamente con server_default
+    )
+    
+    db.add(historial)
+    await db.flush()
+    
+    logger.info(f"Estado del servicio {id_servicio} cambiado a {nuevo_estado.value}")
+
+
+async def calcular_y_guardar_metricas(
+    db: AsyncSession,
+    id_servicio: int
+) -> None:
+    """
+    Calcula y guarda las métricas de un servicio FINALIZADO.
+    Esta función debe llamarse SOLO cuando el servicio se marca como 'finalizado'.
+    
+    Métricas calculadas:
+    - tiempo_respuesta: desde creación de solicitud hasta aceptación (tecnico_asignado)
+    - tiempo_llegada: desde aceptación (tecnico_asignado) hasta llegada (en_lugar)
+    - tiempo_resolucion: desde llegada (en_lugar) hasta finalización (finalizado)
+    """
+    from app.models.historial_estado_servicio import HistorialEstadoServicio
+    from app.models.metrica import Metrica
+    from app.models.solicitud_servicio import SolicitudServicio
+    
+    # Obtener el servicio con su solicitud
+    result = await db.execute(
+        select(Servicio).options(
+            selectinload(Servicio.solicitud_servicio)
+        ).where(Servicio.id == id_servicio)
+    )
+    servicio = result.scalar_one_or_none()
+    
+    if not servicio:
+        logger.error(f"Servicio {id_servicio} no encontrado para calcular métricas")
+        return
+    
+    # Obtener todos los cambios de estado ordenados por tiempo
+    result = await db.execute(
+        select(HistorialEstadoServicio).where(
+            HistorialEstadoServicio.id_servicio == id_servicio
+        ).order_by(HistorialEstadoServicio.tiempo.asc())
+    )
+    historial = list(result.scalars().all())
+    
+    if not historial:
+        logger.warning(f"No hay historial de estados para el servicio {id_servicio}")
+        return
+    
+    # Crear diccionario de timestamps por estado
+    timestamps = {}
+    for registro in historial:
+        # Guardar el primer timestamp de cada estado
+        if registro.estado not in timestamps:
+            timestamps[registro.estado] = registro.tiempo
+    
+    # Calcular métricas
+    tiempo_respuesta = None
+    tiempo_llegada = None
+    tiempo_resolucion = None
+    
+    # 1. tiempo_respuesta: desde creación de solicitud hasta tecnico_asignado
+    if servicio.solicitud_servicio and EstadoServicio.tecnico_asignado in timestamps:
+        tiempo_creacion = servicio.solicitud_servicio.fecha
+        tiempo_aceptacion = timestamps[EstadoServicio.tecnico_asignado]
+        tiempo_respuesta = tiempo_aceptacion - tiempo_creacion
+    
+    # 2. tiempo_llegada: desde tecnico_asignado hasta en_lugar
+    if EstadoServicio.tecnico_asignado in timestamps and EstadoServicio.en_lugar in timestamps:
+        tiempo_aceptacion = timestamps[EstadoServicio.tecnico_asignado]
+        tiempo_en_lugar = timestamps[EstadoServicio.en_lugar]
+        tiempo_llegada = tiempo_en_lugar - tiempo_aceptacion
+    
+    # 3. tiempo_resolucion: desde en_lugar hasta finalizado
+    if EstadoServicio.en_lugar in timestamps and EstadoServicio.finalizado in timestamps:
+        tiempo_en_lugar = timestamps[EstadoServicio.en_lugar]
+        tiempo_finalizado = timestamps[EstadoServicio.finalizado]
+        tiempo_resolucion = tiempo_finalizado - tiempo_en_lugar
+    
+    # Verificar si ya existe una métrica para este servicio
+    result = await db.execute(
+        select(Metrica).where(Metrica.id_servicio == id_servicio)
+    )
+    metrica_existente = result.scalar_one_or_none()
+    
+    if metrica_existente:
+        # Actualizar métrica existente
+        metrica_existente.tiempo_respuesta = tiempo_respuesta
+        metrica_existente.tiempo_llegada = tiempo_llegada
+        metrica_existente.tiempo_resolucion = tiempo_resolucion
+        logger.info(f"Métricas actualizadas para servicio {id_servicio}")
+    else:
+        # Crear nueva métrica
+        metrica = Metrica(
+            id_servicio=id_servicio,
+            tiempo_respuesta=tiempo_respuesta,
+            tiempo_llegada=tiempo_llegada,
+            tiempo_resolucion=tiempo_resolucion
+        )
+        db.add(metrica)
+        logger.info(f"Métricas creadas para servicio {id_servicio}")
+    
+    await db.flush()
+
+
+async def actualizar_estado_servicio(
+    db: AsyncSession,
+    id_servicio: int,
+    nuevo_estado: EstadoServicio
+) -> Servicio:
+    """
+    Actualiza el estado de un servicio y registra el cambio en el historial.
+    Si el nuevo estado es 'finalizado', también calcula y guarda las métricas.
+    
+    Esta es la función principal que debe usarse para cambiar estados.
+    """
+    # Obtener el servicio
+    servicio = await servicio_crud.get(db, id_servicio)
+    if not servicio:
+        raise ValueError("Servicio no encontrado")
+    
+    # Actualizar el estado
+    servicio.estado = nuevo_estado
+    
+    # Registrar en historial
+    await registrar_cambio_estado(db, id_servicio, nuevo_estado)
+    
+    # Si se finalizó, calcular métricas
+    if nuevo_estado == EstadoServicio.finalizado:
+        await calcular_y_guardar_metricas(db, id_servicio)
+    
+    await db.flush()
     
     return servicio

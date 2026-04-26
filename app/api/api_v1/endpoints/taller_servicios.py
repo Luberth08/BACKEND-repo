@@ -577,3 +577,159 @@ async def obtener_detalle_servicio(
         tecnicos_asignados=tecnicos_response,
         vehiculos_asignados=vehiculos_response
     )
+
+
+# ============================================================================
+# ENDPOINTS PARA MÉTRICAS E HISTORIAL
+# ============================================================================
+
+from pydantic import BaseModel
+from datetime import timedelta
+from typing import Optional
+
+class EstadoHistorialResponse(BaseModel):
+    estado: str
+    estado_descripcion: str
+    tiempo: str  # ISO format
+    
+class MetricaResponse(BaseModel):
+    tiempo_respuesta: Optional[str]  # formato legible ej: "5 minutos"
+    tiempo_respuesta_segundos: Optional[int]
+    tiempo_llegada: Optional[str]
+    tiempo_llegada_segundos: Optional[int]
+    tiempo_resolucion: Optional[str]
+    tiempo_resolucion_segundos: Optional[int]
+    tiempo_total: Optional[str]
+    tiempo_total_segundos: Optional[int]
+
+
+def format_timedelta(td: timedelta) -> str:
+    """Convierte un timedelta a formato legible"""
+    if not td:
+        return None
+    
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if seconds > 0 or not parts:
+        parts.append(f"{seconds}s")
+    
+    return " ".join(parts)
+
+
+def get_estado_descripcion(estado: str) -> str:
+    """Retorna la descripción en español del estado"""
+    map_estados = {
+        'creado': 'Creado',
+        'tecnico_asignado': 'Técnico Asignado',
+        'en_camino': 'En Camino',
+        'en_lugar': 'En el Lugar',
+        'en_atencion': 'En Atención',
+        'finalizado': 'Finalizado',
+        'cancelado': 'Cancelado'
+    }
+    return map_estados.get(estado, estado)
+
+
+@router.get("/servicios/{servicio_id}/historial", response_model=List[EstadoHistorialResponse])
+async def obtener_historial_estados(
+    servicio_id: int,
+    id_taller: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene el historial completo de cambios de estado de un servicio.
+    Útil para seguimiento en tiempo real de servicios en proceso.
+    """
+    from sqlalchemy import select
+    from app.models.historial_estado_servicio import HistorialEstadoServicio
+    from app.models.servicio import Servicio
+    
+    # Verificar que el servicio existe y pertenece al taller
+    servicio = await servicio_crud.get(db, servicio_id)
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    if servicio.id_taller != id_taller:
+        raise HTTPException(status_code=403, detail="El servicio no pertenece a este taller")
+    
+    # Obtener historial ordenado por tiempo
+    result = await db.execute(
+        select(HistorialEstadoServicio).where(
+            HistorialEstadoServicio.id_servicio == servicio_id
+        ).order_by(HistorialEstadoServicio.tiempo.asc())
+    )
+    
+    historial = result.scalars().all()
+    
+    return [
+        EstadoHistorialResponse(
+            estado=h.estado.value,
+            estado_descripcion=get_estado_descripcion(h.estado.value),
+            tiempo=h.tiempo.isoformat()
+        )
+        for h in historial
+    ]
+
+
+@router.get("/servicios/{servicio_id}/metricas", response_model=MetricaResponse)
+async def obtener_metricas_servicio(
+    servicio_id: int,
+    id_taller: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Obtiene las métricas calculadas de un servicio finalizado.
+    Incluye tiempos de respuesta, llegada y resolución.
+    """
+    from sqlalchemy import select
+    from app.models.metrica import Metrica
+    from app.models.servicio import Servicio
+    
+    # Verificar que el servicio existe y pertenece al taller
+    servicio = await servicio_crud.get(db, servicio_id)
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    
+    if servicio.id_taller != id_taller:
+        raise HTTPException(status_code=403, detail="El servicio no pertenece a este taller")
+    
+    # Obtener métricas
+    result = await db.execute(
+        select(Metrica).where(Metrica.id_servicio == servicio_id)
+    )
+    
+    metrica = result.scalar_one_or_none()
+    
+    if not metrica:
+        raise HTTPException(
+            status_code=404, 
+            detail="No hay métricas disponibles para este servicio. Las métricas se calculan cuando el servicio se finaliza."
+        )
+    
+    # Calcular tiempo total
+    tiempo_total = None
+    tiempo_total_segundos = None
+    if metrica.tiempo_respuesta and metrica.tiempo_llegada and metrica.tiempo_resolucion:
+        tiempo_total = metrica.tiempo_respuesta + metrica.tiempo_llegada + metrica.tiempo_resolucion
+        tiempo_total_segundos = int(tiempo_total.total_seconds())
+    
+    return MetricaResponse(
+        tiempo_respuesta=format_timedelta(metrica.tiempo_respuesta) if metrica.tiempo_respuesta else None,
+        tiempo_respuesta_segundos=int(metrica.tiempo_respuesta.total_seconds()) if metrica.tiempo_respuesta else None,
+        tiempo_llegada=format_timedelta(metrica.tiempo_llegada) if metrica.tiempo_llegada else None,
+        tiempo_llegada_segundos=int(metrica.tiempo_llegada.total_seconds()) if metrica.tiempo_llegada else None,
+        tiempo_resolucion=format_timedelta(metrica.tiempo_resolucion) if metrica.tiempo_resolucion else None,
+        tiempo_resolucion_segundos=int(metrica.tiempo_resolucion.total_seconds()) if metrica.tiempo_resolucion else None,
+        tiempo_total=format_timedelta(tiempo_total) if tiempo_total else None,
+        tiempo_total_segundos=tiempo_total_segundos
+    )
