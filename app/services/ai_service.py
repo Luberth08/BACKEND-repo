@@ -120,9 +120,6 @@ Responde SOLO con un JSON en este formato:
 {{"concepto_mas_probable": "nombre_del_concepto", "confianza": 0.85, "descripcion": "breve descripción de lo que ves"}}
 
 Usa EXACTAMENTE uno de estos conceptos: {labels_text}"""
-
-        # Nota: Groq actualmente no tiene Vision API, usaremos solo el LLM con descripción
-        # Por ahora, haremos análisis basado en el nombre del archivo o simulado
         
         # Análisis simple basado en el contexto
         best_match = candidate_labels[0] if candidate_labels else "desconocido"
