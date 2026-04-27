@@ -16,3 +16,8 @@ shapely # convertir coordenadas a objetos
 groq>=0.4.0    # Groq API para LLM y Whisper
 Pillow>=10.0.0 # Procesamiento básico de imágenes
 requests>=2.31.0 # Para APIs externas
+
+
+# Firebase Cloud Messaging
+google-auth>=2.23.0  # Para FCM API v1
+httpx>=0.25.0  # Cliente HTTP asíncrono

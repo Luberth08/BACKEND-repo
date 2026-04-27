@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     WHISPER_MODEL_SIZE: str = "base"
     USE_REAL_AI: bool = True
 
-    # Firebase Cloud Messaging
-    FCM_SERVER_KEY: str | None = None
+    # Firebase Cloud Messaging (API v1)
+    FCM_CREDENTIALS_PATH: str | None = None  # Ruta al archivo JSON de credenciales
+    FIREBASE_PROJECT_ID: str | None = None   # ID del proyecto Firebase
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

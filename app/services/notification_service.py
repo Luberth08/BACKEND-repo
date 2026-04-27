@@ -1,5 +1,5 @@
 """
-Servicio para envío de notificaciones push usando Firebase Cloud Messaging (FCM)
+Servicio para envío de notificaciones push usando Firebase Cloud Messaging (FCM) API v1
 """
 import logging
 from typing import List, Optional, Dict, Any
@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import httpx
 import json
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
 
 from app.models.dispositivo_usuario import DispositivoUsuario
 from app.models.persona import Persona
@@ -20,12 +22,47 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 class NotificationService:
-    """Servicio para gestionar notificaciones push"""
+    """Servicio para gestionar notificaciones push usando FCM API v1"""
     
     def __init__(self):
-        # Configuración FCM (agregar a settings)
-        self.fcm_server_key = getattr(settings, 'FCM_SERVER_KEY', None)
-        self.fcm_url = "https://fcm.googleapis.com/fcm/send"
+        # Configuración FCM v1
+        self.fcm_credentials_path = getattr(settings, 'FCM_CREDENTIALS_PATH', None)
+        self.project_id = getattr(settings, 'FIREBASE_PROJECT_ID', None)
+        self.fcm_url = f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send"
+        self._access_token = None
+    
+    def _get_access_token(self) -> Optional[str]:
+        """
+        Obtiene el access token de OAuth2 usando las credenciales de servicio
+        """
+        try:
+            if not self.fcm_credentials_path:
+                logger.warning("FCM_CREDENTIALS_PATH no configurado")
+                return None
+            
+            # Si la ruta es relativa, buscar desde el directorio del proyecto
+            import os
+            if not os.path.isabs(self.fcm_credentials_path):
+                # Obtener directorio base del proyecto
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                credentials_path = os.path.join(base_dir, self.fcm_credentials_path)
+            else:
+                credentials_path = self.fcm_credentials_path
+            
+            logger.info(f"Cargando credenciales FCM desde: {credentials_path}")
+            
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials_path,
+                scopes=['https://www.googleapis.com/auth/firebase.messaging']
+            )
+            
+            credentials.refresh(Request())
+            logger.info("✅ Access token obtenido exitosamente")
+            return credentials.token
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo access token: {e}")
+            return None
     
     async def enviar_notificacion_push(
         self,
@@ -35,60 +72,72 @@ class NotificationService:
         datos_extra: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
-        Envía notificación push a una lista de tokens FCM
+        Envía notificación push a una lista de tokens FCM usando API v1
         """
-        if not self.fcm_server_key:
-            logger.warning("FCM_SERVER_KEY no configurado, no se pueden enviar notificaciones")
+        if not self.fcm_credentials_path or not self.project_id:
+            logger.warning("FCM no configurado correctamente (falta credentials o project_id)")
             return False
         
         if not tokens:
             logger.info("No hay tokens FCM para enviar notificación")
             return True
         
-        # Preparar payload FCM
-        payload = {
-            "registration_ids": tokens,
-            "notification": {
-                "title": titulo,
-                "body": mensaje,
-                "sound": "default",
-                "badge": 1
-            },
-            "data": datos_extra or {}
-        }
-        
-        headers = {
-            "Authorization": f"key={self.fcm_server_key}",
-            "Content-Type": "application/json"
-        }
-        
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    self.fcm_url,
-                    json=payload,
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    success_count = result.get('success', 0)
-                    failure_count = result.get('failure', 0)
-                    
-                    logger.info(f"Notificación enviada: {success_count} éxitos, {failure_count} fallos")
-                    
-                    # TODO: Manejar tokens inválidos (eliminar de BD)
-                    if failure_count > 0:
-                        logger.warning(f"Algunos tokens FCM fallaron: {result.get('results', [])}")
-                    
-                    return success_count > 0
-                else:
-                    logger.error(f"Error FCM: {response.status_code} - {response.text}")
-                    return False
-                    
-        except Exception as e:
-            logger.error(f"Error enviando notificación FCM: {e}")
+        # Obtener access token
+        access_token = self._get_access_token()
+        if not access_token:
+            logger.error("No se pudo obtener access token de FCM")
             return False
+        
+        success_count = 0
+        failure_count = 0
+        
+        # FCM v1 requiere enviar un mensaje por token
+        for token in tokens:
+            try:
+                # Preparar payload FCM v1
+                payload = {
+                    "message": {
+                        "token": token,
+                        "notification": {
+                            "title": titulo,
+                            "body": mensaje
+                        },
+                        "data": {str(k): str(v) for k, v in (datos_extra or {}).items()},
+                        "android": {
+                            "priority": "high",
+                            "notification": {
+                                "sound": "default",
+                                "channel_id": "default"
+                            }
+                        }
+                    }
+                }
+                
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }
+                
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        self.fcm_url,
+                        json=payload,
+                        headers=headers
+                    )
+                    
+                    if response.status_code == 200:
+                        success_count += 1
+                        logger.info(f"Notificación enviada exitosamente a token: {token[:20]}...")
+                    else:
+                        failure_count += 1
+                        logger.error(f"Error FCM para token {token[:20]}...: {response.status_code} - {response.text}")
+                        
+            except Exception as e:
+                failure_count += 1
+                logger.error(f"Error enviando notificación a token {token[:20]}...: {e}")
+        
+        logger.info(f"Notificaciones enviadas: {success_count} éxitos, {failure_count} fallos")
+        return success_count > 0
     
     async def obtener_tokens_persona(self, db: AsyncSession, id_persona: int) -> List[str]:
         """
