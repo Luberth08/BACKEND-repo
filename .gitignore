@@ -1,0 +1,67 @@
+# ─── Variables de entorno (NUNCA subir) ──────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+# ─── Entorno virtual Python ──────────────────────────────────
+venv/
+env/
+.venv/
+ENV/
+
+# ─── Python caché ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Base de datos local ─────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
+
+# ─── Logs ────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ─── Archivos de audio/modelo IA (Whisper descarga en runtime)
+*.pt
+*.bin
+models/
+whisper_models/
+
+# ─── IDEs ────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Coverage ────────────────────────────────────────────────
+coverage/
+htmlcov/
+.coverage
+*.lcov
+
+# ─── Temporales ──────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.bak
+.cache/

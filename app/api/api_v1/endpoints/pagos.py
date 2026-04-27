@@ -1,0 +1,369 @@
+"""
+CU-15: Gestionar Pagos
+Endpoints para generar cobros, consultar facturas y recibir webhooks de Stripe.
+"""
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+from decimal import Decimal
+
+from app.db.session import get_db
+from app.core.deps import get_current_usuario
+from app.core.config import settings
+from app.models.usuario import Usuario
+from app.models.servicio import Servicio, EstadoServicio
+from app.models.factura import Factura, EstadoPago
+from app.models.empleado import Empleado
+from app.models.rol_usuario import RolUsuario
+from app.models.rol import Rol
+from app.core.constants import ROL_TECNICO
+from app.models.historial_estados_servicio import HistorialEstadosServicio, EstadoHistorial
+from app.models.metrica import Metrica
+from app.services.stripe_service import crear_sesion_checkout, verificar_webhook
+
+router = APIRouter(prefix="/pagos", tags=["Pagos"])
+
+# ============================================================
+# SCHEMAS
+# ============================================================
+
+class GenerarCobroRequest(BaseModel):
+    monto_total: float
+
+class FacturaResponse(BaseModel):
+    id: int
+    id_servicio: int
+    monto_total: float
+    comision: float
+    liquido_taller: float
+    estado_pago: str
+    metodo_pago: Optional[str] = None
+    url_qr: Optional[str] = None
+    fecha_emision: datetime
+    fecha_pago: Optional[datetime] = None
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+async def _verificar_tecnico_en_taller(db: AsyncSession, usuario_id: int, taller_id: int):
+    result = await db.execute(
+        select(RolUsuario).join(Rol).where(
+            and_(
+                RolUsuario.id_usuario == usuario_id,
+                RolUsuario.id_taller == taller_id,
+                Rol.nombre == ROL_TECNICO
+            )
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="No eres técnico de este taller")
+
+    result_emp = await db.execute(
+        select(Empleado).where(
+            and_(
+                Empleado.id_usuario == usuario_id,
+                Empleado.id_taller == taller_id
+            )
+        )
+    )
+    empleado = result_emp.scalar_one_or_none()
+    if not empleado:
+        raise HTTPException(status_code=403, detail="Perfil de empleado no encontrado")
+    return empleado
+
+async def _finalizar_servicio(db: AsyncSession, servicio: Servicio):
+    """
+    Función compartida para finalizar el servicio cuando se confirma el pago
+    """
+    # Evitar doble finalización
+    if servicio.estado == EstadoServicio.finalizado:
+        return
+        
+    from datetime import timezone
+    ahora = datetime.now(timezone.utc)
+    
+    # Calcular tiempo de resolución
+    result = await db.execute(
+        select(HistorialEstadosServicio)
+        .where(HistorialEstadosServicio.id_servicio == servicio.id)
+        .order_by(HistorialEstadosServicio.fecha.desc())
+        .limit(1)
+    )
+    ultimo_estado = result.scalar_one_or_none()
+    
+    tiempo_desde_anterior = None
+    if ultimo_estado:
+        tiempo_desde_anterior = (ahora - ultimo_estado.fecha).total_seconds()
+        
+    # Cambiar estado
+    servicio.estado = EstadoServicio.finalizado
+    
+    # Historial
+    nuevo_historial = HistorialEstadosServicio(
+        id_servicio=servicio.id,
+        estado=EstadoHistorial.finalizado,
+        fecha=ahora,
+        tiempo_desde_anterior=tiempo_desde_anterior
+    )
+    db.add(nuevo_historial)
+    
+    # Metrica
+    if ultimo_estado and ultimo_estado.estado.value == 'en_atencion':
+        result_metrica = await db.execute(
+            select(Metrica).where(Metrica.id_servicio == servicio.id)
+        )
+        metrica = result_metrica.scalar_one_or_none()
+        if metrica:
+            metrica.tiempo_resolucion = tiempo_desde_anterior
+            
+
+
+# ============================================================
+# ENDPOINTS
+# ============================================================
+
+@router.post("/servicio/{servicio_id}/generar", response_model=FacturaResponse)
+async def generar_cobro(
+    servicio_id: int,
+    payload: GenerarCobroRequest,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    [TÉCNICO] Genera una factura y un link de pago de Stripe para un servicio.
+    El servicio debe estar 'en_atencion'.
+    """
+    servicio = await db.get(Servicio, servicio_id)
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+        
+    await _verificar_tecnico_en_taller(db, current_usuario.id, servicio.id_taller)
+    
+    if servicio.estado != EstadoServicio.en_atencion:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Solo se puede generar cobro si el servicio está 'en_atencion' (Actual: {servicio.estado.value})"
+        )
+        
+    # Verificar si ya existe una factura
+    result = await db.execute(select(Factura).where(Factura.id_servicio == servicio_id))
+    factura_existente = result.scalar_one_or_none()
+    
+    if factura_existente and factura_existente.estado_pago == EstadoPago.pagado:
+        raise HTTPException(status_code=400, detail="El servicio ya fue pagado")
+
+    # Cálculos
+    monto = Decimal(str(payload.monto_total))
+    porcentaje_comision = Decimal(str(settings.PORCENTAJE_COMISION_PLATAFORMA))
+    comision = round(monto * porcentaje_comision, 2)
+    liquido = monto - comision
+    
+    # Llamar a Stripe
+    stripe_session = crear_sesion_checkout(
+        servicio_id=servicio_id,
+        monto_total=float(monto),
+        descripcion=f"Asistencia Vial - Servicio #{servicio_id}"
+    )
+    
+    if factura_existente:
+        # Actualizar existente
+        factura_existente.monto_total = monto
+        factura_existente.comision = comision
+        factura_existente.liquido_taller = liquido
+        factura_existente.id_pasarela = stripe_session["id"]
+        factura_existente.url_qr = stripe_session["url"]
+        factura_existente.metodo_pago = "stripe"
+        factura_existente.estado_pago = EstadoPago.pendiente
+        factura = factura_existente
+    else:
+        # Crear nueva
+        factura = Factura(
+            id_servicio=servicio_id,
+            monto_total=monto,
+            comision=comision,
+            liquido_taller=liquido,
+            id_pasarela=stripe_session["id"],
+            url_qr=stripe_session["url"],
+            metodo_pago="stripe",
+            estado_pago=EstadoPago.pendiente
+        )
+        db.add(factura)
+        
+    await db.commit()
+    await db.refresh(factura)
+    
+    return FacturaResponse(
+        id=factura.id,
+        id_servicio=factura.id_servicio,
+        monto_total=float(factura.monto_total),
+        comision=float(factura.comision),
+        liquido_taller=float(factura.liquido_taller),
+        estado_pago=factura.estado_pago.value,
+        metodo_pago=factura.metodo_pago,
+        url_qr=factura.url_qr,
+        fecha_emision=factura.fecha_emision,
+        fecha_pago=factura.fecha_pago
+    )
+
+
+@router.post("/servicio/{servicio_id}/pago-efectivo", response_model=FacturaResponse)
+async def marcar_pago_efectivo(
+    servicio_id: int,
+    payload: GenerarCobroRequest,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    [TÉCNICO] Marca el servicio como pagado en efectivo.
+    Calcula comisiones y finaliza el servicio automáticamente.
+    """
+    servicio = await db.get(Servicio, servicio_id)
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+        
+    await _verificar_tecnico_en_taller(db, current_usuario.id, servicio.id_taller)
+    
+    if servicio.estado not in [EstadoServicio.en_atencion, EstadoServicio.finalizado]:
+        raise HTTPException(
+            status_code=400, 
+            detail="Solo se puede cobrar si el servicio está en atención"
+        )
+        
+    result = await db.execute(select(Factura).where(Factura.id_servicio == servicio_id))
+    factura = result.scalar_one_or_none()
+    
+    if factura and factura.estado_pago == EstadoPago.pagado:
+        raise HTTPException(status_code=400, detail="El servicio ya fue pagado")
+
+    monto = Decimal(str(payload.monto_total))
+    porcentaje_comision = Decimal(str(settings.PORCENTAJE_COMISION_PLATAFORMA))
+    comision = round(monto * porcentaje_comision, 2)
+    liquido = monto - comision
+    
+    from datetime import timezone
+    ahora = datetime.now(timezone.utc)
+    
+    if factura:
+        factura.monto_total = monto
+        factura.comision = comision
+        factura.liquido_taller = liquido
+        factura.metodo_pago = "efectivo"
+        factura.estado_pago = EstadoPago.pagado
+        factura.fecha_pago = ahora
+    else:
+        factura = Factura(
+            id_servicio=servicio_id,
+            monto_total=monto,
+            comision=comision,
+            liquido_taller=liquido,
+            metodo_pago="efectivo",
+            estado_pago=EstadoPago.pagado,
+            fecha_pago=ahora
+        )
+        db.add(factura)
+        
+    # Finalizar el servicio automáticamente
+    await _finalizar_servicio(db, servicio)
+    
+    await db.commit()
+    await db.refresh(factura)
+    
+    return FacturaResponse(
+        id=factura.id,
+        id_servicio=factura.id_servicio,
+        monto_total=float(factura.monto_total),
+        comision=float(factura.comision),
+        liquido_taller=float(factura.liquido_taller),
+        estado_pago=factura.estado_pago.value,
+        metodo_pago=factura.metodo_pago,
+        url_qr=factura.url_qr,
+        fecha_emision=factura.fecha_emision,
+        fecha_pago=factura.fecha_pago
+    )
+
+
+@router.get("/servicio/{servicio_id}", response_model=FacturaResponse)
+async def consultar_factura(
+    servicio_id: int,
+    current_usuario: Usuario = Depends(get_current_usuario),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    [CLIENTE/TALLER] Consulta la factura y el link de pago de un servicio.
+    """
+    result = await db.execute(select(Factura).where(Factura.id_servicio == servicio_id))
+    factura = result.scalar_one_or_none()
+    
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada para este servicio")
+        
+    return FacturaResponse(
+        id=factura.id,
+        id_servicio=factura.id_servicio,
+        monto_total=float(factura.monto_total),
+        comision=float(factura.comision),
+        liquido_taller=float(factura.liquido_taller),
+        estado_pago=factura.estado_pago.value,
+        metodo_pago=factura.metodo_pago,
+        url_qr=factura.url_qr,
+        fecha_emision=factura.fecha_emision,
+        fecha_pago=factura.fecha_pago
+    )
+
+
+@router.post("/webhook", status_code=status.HTTP_200_OK)
+async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    [STRIPE] Endpoint público para recibir confirmaciones de pago.
+    """
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = verificar_webhook(payload, sig_header)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Manejar eventos
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        
+        # Obtener el servicio asociado
+        metadata = getattr(session, 'metadata', {})
+        servicio_id_str = None
+        if hasattr(metadata, 'get'):
+            servicio_id_str = metadata.get('servicio_id')
+        else:
+            servicio_id_str = getattr(metadata, 'servicio_id', None)
+
+        if not servicio_id_str:
+            return {"status": "ignored", "reason": "No servicio_id in metadata"}
+            
+        servicio_id = int(servicio_id_str)
+        
+        # Actualizar factura
+        session_id = getattr(session, 'id', None)
+        result = await db.execute(
+            select(Factura).where(Factura.id_pasarela == session_id)
+        )
+        factura = result.scalar_one_or_none()
+        
+        if factura:
+            from datetime import timezone
+            factura.estado_pago = EstadoPago.pagado
+            factura.fecha_pago = datetime.now(timezone.utc)
+            
+            # Finalizar el servicio automáticamente
+            servicio = await db.get(Servicio, servicio_id)
+            if servicio:
+                await _finalizar_servicio(db, servicio)
+                
+            await db.commit()
+            return {"status": "success"}
+
+    return {"status": "ignored"}
